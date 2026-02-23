@@ -17,8 +17,8 @@ type ChatMessage struct {
 	RecipientID string   `json:"recipient_id,omitempty"`
 	IsPrivate   bool     `json:"is_private"`
 	Users       []string `json:"users,omitempty"`
-	AvatarURL   string   `json:"avatar_url,omitempty"` // Nueva propiedad
-	Sender      string   `json:"sender,omitempty"`     // Para separar nombre de contenido
+	AvatarURL   string   `json:"avatar_url,omitempty"`
+	Sender      string   `json:"sender,omitempty"`
 }
 
 type Client struct {
@@ -79,21 +79,21 @@ func (c *Client) readFromWS(userName string) {
 		json.Unmarshal(msgBytes, &chatMsg)
 
 		if chatMsg.Type == "chat" || chatMsg.Type == "" {
-			// BUSCAMOS EL AVATAR DEL REMITENTE EN LA DB
 			u, err := c.Store.GetUserByUsername(context.Background(), userName)
 			if err == nil {
 				chatMsg.AvatarURL = u.AvatarURL
 				chatMsg.Sender = userName
 			}
 
+			// GUARDADO CON FORMATO PARA EL JOIN
+			fullContent := userName + ": " + chatMsg.Content
 			c.Store.SaveMessage(context.Background(), data.Message{
-				Content:     chatMsg.Content,
+				Content:     fullContent,
 				ChannelID:   chatMsg.ChannelID,
 				IsPrivate:   chatMsg.IsPrivate,
 				RecipientID: chatMsg.RecipientID,
 			})
 			
-			// Serializamos de nuevo con el AvatarURL incluido
 			msgBytes, _ = json.Marshal(chatMsg)
 		}
 
