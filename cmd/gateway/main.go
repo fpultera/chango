@@ -57,6 +57,7 @@ func main() {
 			ID:   uuid.NewString(),
 			Conn: conn,
 			Room: room,
+			Send: make(chan []byte, 256), // buffer desacopla redis del socket
 		}
 
 		hub.Add(client)
