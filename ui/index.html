@@ -4,54 +4,82 @@
     <meta charset="UTF-8">
     <title>Chango 🐵</title>
     <style>
-        :root { --sidebar-bg: #1e1f22; --chat-bg: #313338; --user-bg: #2b2d31; --accent: #5865f2; }
+        :root { --sidebar-bg: #1e1f22; --chat-bg: #313338; --user-bg: #2b2d31; --accent: #5865f2; --hover: #35373c; --danger: #da373c; }
         body { font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; height: 100vh; color: #dbdee1; background: var(--chat-bg); overflow: hidden; }
+        
+        /* Auth Overlay */
         #auth-overlay { position: fixed; inset: 0; background: #1e1f22; z-index: 100; display: flex; align-items: center; justify-content: center; }
-        .auth-box { background: #313338; padding: 30px; border-radius: 8px; width: 300px; text-align: center; }
+        .auth-box { background: #313338; padding: 30px; border-radius: 8px; width: 300px; text-align: center; box-shadow: 0 8px 16px rgba(0,0,0,0.3); }
         .auth-box input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 4px; border: none; background: #1e1f22; color: white; box-sizing: border-box; }
+        
+        /* Sidebar y Canales */
         #sidebar { width: 220px; background: var(--sidebar-bg); padding: 15px; display: flex; flex-direction: column; }
         .sidebar-header { display: flex; justify-content: space-between; align-items: center; color: white; margin-bottom: 20px; }
         #channel-list { flex: 1; overflow-y: auto; }
         .channel-btn { padding: 10px; border-radius: 5px; cursor: pointer; transition: 0.2s; margin-bottom: 2px; }
         .channel-btn.active { background: var(--accent); color: white; }
-        #main { flex: 1; display: flex; flex-direction: column; }
+        .channel-btn:hover:not(.active) { background: var(--hover); }
+
+        /* Principal */
+        #main { flex: 1; display: flex; flex-direction: column; position: relative; }
+        header { padding: 15px; font-weight: bold; border-bottom: 1px solid #26272d; display: flex; justify-content: space-between; }
         #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
-        .message { background: #383a40; padding: 10px; border-radius: 8px; max-width: 85%; align-self: flex-start; }
+        .message { background: #383a40; padding: 10px; border-radius: 8px; max-width: 85%; align-self: flex-start; word-wrap: break-word; }
+        
+        /* Lista de Usuarios */
         #user-list { width: 180px; background: var(--sidebar-bg); padding: 15px; border-left: 1px solid #26272d; }
         .user-item { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 0.9em; cursor: pointer; padding: 5px; border-radius: 4px; }
-        .user-item:hover { background: #35373c; }
+        .user-item:hover { background: var(--hover); }
         .dot { width: 8px; height: 8px; background: #23a55a; border-radius: 50%; }
+
+        /* Input */
         .input-area { padding: 20px; background: var(--chat-bg); }
         input#msgInput { width: 100%; padding: 12px; border-radius: 8px; border: none; background: #383a40; color: white; outline: none; box-sizing: border-box; }
+
+        /* NOTIFICACIONES DE BURBUJA */
+        #notif-container { position: fixed; top: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: var(--accent); color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); cursor: pointer; animation: slideIn 0.3s ease; min-width: 200px; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        button.logout-btn { margin-top: 10px; background: var(--danger); color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
+
+<div id="notif-container"></div>
 
 <div id="auth-overlay">
     <div class="auth-box">
         <h2 style="color: white">Chango 🐵</h2>
         <input type="text" id="username" placeholder="Usuario">
         <input type="password" id="password" placeholder="Contraseña">
-        <button onclick="auth('login')" style="width: 100%; background: var(--accent); color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer;">Entrar</button>
+        <button onclick="auth('login')" style="width: 100%; background: var(--accent); color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">Entrar</button>
         <button onclick="auth('register')" style="background:none; color:var(--accent); border:none; margin-top:10px; cursor:pointer">Regístrate</button>
     </div>
 </div>
 
 <div id="sidebar">
-    <div class="sidebar-header"><h3>Canales</h3><span style="cursor:pointer" onclick="createNewChannel()">+</span></div>
+    <div class="sidebar-header"><h3>Canales</h3><span style="cursor:pointer; font-size: 1.5em;" onclick="createNewChannel()">+</span></div>
     <div id="channel-list"></div>
-    <button onclick="logout()" style="margin-top:10px; background:#da373c; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer">Salir</button>
+    <button class="logout-btn" onclick="logout()">Cerrar Sesión</button>
 </div>
 
 <div id="main">
-    <header style="padding: 15px; font-weight: bold; border-bottom: 1px solid #26272d;"># <span id="channelName">general</span></header>
+    <header>
+        <span># <span id="channelName">general</span></span>
+        <span id="myIdentity" style="font-size: 0.8em; color: #949ba4;"></span>
+    </header>
     <div id="chat"></div>
     <div class="input-area">
-        <input type="text" id="msgInput" placeholder="Escribe un mensaje y pulsa Enter..." autocomplete="off">
+        <div id="typing-status" style="height: 20px; font-size: 0.8em; font-style: italic; color: #b5bac1; margin-bottom: 5px;"></div>
+        <input type="text" id="msgInput" placeholder="Escribe un mensaje..." autocomplete="off">
     </div>
 </div>
 
-<div id="user-list"><h4 style="color: #949ba4; font-size: 0.75em; margin-bottom: 15px;">ONLINE</h4><div id="online-users"></div></div>
+<div id="user-list">
+    <h4 style="color: #949ba4; font-size: 0.75em; margin-bottom: 15px; text-transform: uppercase;">Online</h4>
+    <div id="online-users"></div>
+</div>
 
 <script>
     let currentChannel = 'general';
@@ -63,6 +91,7 @@
     const input = document.getElementById("msgInput");
     const userListDiv = document.getElementById("online-users");
     const chanListDiv = document.getElementById("channel-list");
+    const notifContainer = document.getElementById("notif-container");
     let socket;
 
     window.onload = () => { if (token && userName) showChat(); };
@@ -77,12 +106,13 @@
                 token = data.token; userName = data.username;
                 localStorage.setItem('chango_token', token); localStorage.setItem('chango_user', userName);
                 showChat();
-            } else alert("Registrado!");
-        } else alert("Error");
+            } else alert("¡Registrado correctamente!");
+        } else alert("Error de credenciales");
     }
 
     function showChat() {
         document.getElementById("auth-overlay").style.display = "none";
+        document.getElementById("myIdentity").innerText = `Conectado como: ${userName}`;
         loadChannels(); loadHistory(); connect();
     }
 
@@ -107,9 +137,9 @@
     }
 
     async function createNewChannel() {
-        const name = prompt("Nombre canal:");
+        const name = prompt("Nombre del nuevo canal:");
         if (name) {
-            await fetch('/api/channels', { method: 'POST', body: JSON.stringify({name: name.toLowerCase()}) });
+            await fetch('/api/channels', { method: 'POST', body: JSON.stringify({name: name.toLowerCase().replace(/\s/g, '-')}) });
             loadChannels();
         }
     }
@@ -117,19 +147,41 @@
     function connect() {
         if (socket) socket.close();
         socket = new WebSocket(`ws://${window.location.host}/ws?channel=${currentChannel || 'dm'}&user=${encodeURIComponent(userName)}`);
+        
         socket.onmessage = (e) => {
             const data = JSON.parse(e.data);
-            if (data.type === "users_update") {
+            
+            if (data.type === "channels_update") {
+                loadChannels();
+            } else if (data.type === "users_update") {
                 updateUserList(data.users);
             } else if (data.is_private) {
+                // Lógica de DM
                 if ((data.recipient_id === userName && recipientID === data.channel_id) || 
                     (data.channel_id === userName && recipientID === data.recipient_id)) {
                     addMessageToUI(data.content);
+                } else if (data.recipient_id === userName) {
+                    // NOTIFICACIÓN: Recibí un DM pero no tengo abierto ese chat
+                    showNotification(data.channel_id, data.content);
                 }
             } else if (data.channel_id === currentChannel) {
                 addMessageToUI(data.content);
             }
         };
+    }
+
+    function showNotification(sender, content) {
+        const toast = document.createElement("div");
+        toast.className = "toast";
+        toast.innerHTML = `<strong>${sender}</strong>: ${content.split(': ')[1] || content}`;
+        toast.onclick = () => {
+            recipientID = sender;
+            currentChannel = null;
+            switchUI("@ " + sender, true);
+            toast.remove();
+        };
+        notifContainer.appendChild(toast);
+        setTimeout(() => toast.remove(), 5000); // Desaparece en 5 segundos
     }
 
     function updateUserList(users) {
@@ -171,11 +223,15 @@
     };
 
     function addMessageToUI(text) {
-        const div = document.createElement("div"); div.className = "message";
-        div.innerText = text; chat.appendChild(div); chat.scrollTop = chat.scrollHeight;
+        const div = document.createElement("div"); 
+        div.className = "message";
+        div.innerText = text; 
+        chat.appendChild(div); 
+        chat.scrollTop = chat.scrollHeight;
     }
 
     function loadHistory() {
+        if (!currentChannel) return;
         fetch(`/api/history?channel=${currentChannel}`).then(res => res.json()).then(msgs => {
             if(msgs) msgs.forEach(m => addMessageToUI(m.content));
         });
