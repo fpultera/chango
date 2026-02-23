@@ -1,0 +1,18 @@
+# Binarios de Go
+main
+/main
+
+# Variables de entorno y secretos
+.env
+
+# Carpeta de Avatares (IGNORAR CONTENIDO)
+# Queremos ignorar las fotos subidas pero mantener la carpeta
+ui/static/avatars/*
+!ui/static/avatars/.gitkeep
+
+# Dependencias de Go
+vendor/
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
