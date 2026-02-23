@@ -4,14 +4,13 @@
     <meta charset="UTF-8">
     <title>Chango 🐵</title>
     <style>
-        :root { --sidebar-bg: #1e1f22; --chat-bg: #313338; --accent: #5865f2; --hover: #35373c; }
+        :root { --sidebar-bg: #1e1f22; --chat-bg: #313338; --user-bg: #2b2d31; --accent: #5865f2; }
         body { font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; height: 100vh; color: #dbdee1; background: var(--chat-bg); overflow: hidden; }
         #auth-overlay { position: fixed; inset: 0; background: #1e1f22; z-index: 100; display: flex; align-items: center; justify-content: center; }
         .auth-box { background: #313338; padding: 30px; border-radius: 8px; width: 300px; text-align: center; }
         .auth-box input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 4px; border: none; background: #1e1f22; color: white; box-sizing: border-box; }
         #sidebar { width: 220px; background: var(--sidebar-bg); padding: 15px; display: flex; flex-direction: column; }
         .sidebar-header { display: flex; justify-content: space-between; align-items: center; color: white; margin-bottom: 20px; }
-        .add-chan-btn { cursor: pointer; font-size: 1.5em; color: #949ba4; }
         #channel-list { flex: 1; overflow-y: auto; }
         .channel-btn { padding: 10px; border-radius: 5px; cursor: pointer; transition: 0.2s; margin-bottom: 2px; }
         .channel-btn.active { background: var(--accent); color: white; }
@@ -20,13 +19,10 @@
         .message { background: #383a40; padding: 10px; border-radius: 8px; max-width: 85%; align-self: flex-start; }
         #user-list { width: 180px; background: var(--sidebar-bg); padding: 15px; border-left: 1px solid #26272d; }
         .user-item { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 0.9em; cursor: pointer; padding: 5px; border-radius: 4px; }
-        .user-item:hover { background: var(--hover); }
+        .user-item:hover { background: #35373c; }
         .dot { width: 8px; height: 8px; background: #23a55a; border-radius: 50%; }
         .input-area { padding: 20px; background: var(--chat-bg); }
-        .input-row { display: flex; gap: 10px; }
-        input#msgInput { flex: 1; padding: 12px; border-radius: 8px; border: none; background: #383a40; color: white; outline: none; }
-        button { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
-        .logout-btn { margin-top: 10px; background: #da373c; padding: 8px; font-size: 0.8em; border-radius: 4px; border: none; color: white; cursor: pointer; }
+        input#msgInput { width: 100%; padding: 12px; border-radius: 8px; border: none; background: #383a40; color: white; outline: none; box-sizing: border-box; }
     </style>
 </head>
 <body>
@@ -36,23 +32,22 @@
         <h2 style="color: white">Chango 🐵</h2>
         <input type="text" id="username" placeholder="Usuario">
         <input type="password" id="password" placeholder="Contraseña">
-        <button onclick="auth('login')" style="width: 100%">Entrar</button>
+        <button onclick="auth('login')" style="width: 100%; background: var(--accent); color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer;">Entrar</button>
         <button onclick="auth('register')" style="background:none; color:var(--accent); border:none; margin-top:10px; cursor:pointer">Regístrate</button>
     </div>
 </div>
 
 <div id="sidebar">
-    <div class="sidebar-header"><h3>Canales</h3><span class="add-chan-btn" onclick="createNewChannel()">+</span></div>
+    <div class="sidebar-header"><h3>Canales</h3><span style="cursor:pointer" onclick="createNewChannel()">+</span></div>
     <div id="channel-list"></div>
-    <button class="logout-btn" onclick="logout()">Cerrar Sesión</button>
+    <button onclick="logout()" style="margin-top:10px; background:#da373c; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer">Salir</button>
 </div>
 
 <div id="main">
-    <header id="header" style="padding: 15px; font-weight: bold; border-bottom: 1px solid #26272d;"># <span id="channelName">general</span></header>
+    <header style="padding: 15px; font-weight: bold; border-bottom: 1px solid #26272d;"># <span id="channelName">general</span></header>
     <div id="chat"></div>
     <div class="input-area">
-        <div id="typing-status" style="height: 20px; font-size: 0.8em; font-style: italic; color: #b5bac1; margin-bottom: 5px;"></div>
-        <div class="input-row"><input type="text" id="msgInput" placeholder="Mensaje..." autocomplete="off"><button onclick="send()">Enviar</button></div>
+        <input type="text" id="msgInput" placeholder="Escribe un mensaje y pulsa Enter..." autocomplete="off">
     </div>
 </div>
 
@@ -63,6 +58,7 @@
     let recipientID = null;
     let userName = localStorage.getItem('chango_user');
     let token = localStorage.getItem('chango_token');
+    
     const chat = document.getElementById("chat");
     const input = document.getElementById("msgInput");
     const userListDiv = document.getElementById("online-users");
@@ -101,9 +97,8 @@
             div.className = `channel-btn ${c.name === currentChannel ? 'active' : ''}`;
             div.innerText = `# ${c.name}`;
             div.onclick = () => { 
-                recipientID = null; 
-                currentChannel = c.name; 
-                switchUI(c.name, false); 
+                recipientID = null; currentChannel = c.name; 
+                switchUI(c.name, false);
                 document.querySelectorAll('.channel-btn').forEach(b => b.classList.remove('active'));
                 div.classList.add('active');
             };
@@ -124,10 +119,11 @@
         socket = new WebSocket(`ws://${window.location.host}/ws?channel=${currentChannel || 'dm'}&user=${encodeURIComponent(userName)}`);
         socket.onmessage = (e) => {
             const data = JSON.parse(e.data);
-            if (data.type === "channels_update") loadChannels();
-            else if (data.type === "users_update") updateUserList(data.users);
-            else if (data.is_private) {
-                if ((data.recipient_id === userName && recipientID === data.channel_id) || (data.channel_id === userName && recipientID === data.recipient_id)) {
+            if (data.type === "users_update") {
+                updateUserList(data.users);
+            } else if (data.is_private) {
+                if ((data.recipient_id === userName && recipientID === data.channel_id) || 
+                    (data.channel_id === userName && recipientID === data.recipient_id)) {
                     addMessageToUI(data.content);
                 }
             } else if (data.channel_id === currentChannel) {
@@ -137,16 +133,15 @@
     }
 
     function updateUserList(users) {
-        if (!users) return;
         userListDiv.innerHTML = "";
-        [...new Set(users)].forEach(u => {
+        if(!users) return;
+        users.forEach(u => {
             if (u === userName) return;
             const div = document.createElement("div");
             div.className = "user-item";
             div.innerHTML = `<span class="dot"></span> ${u}`;
             div.onclick = () => { 
-                currentChannel = null; 
-                recipientID = u; 
+                currentChannel = null; recipientID = u; 
                 switchUI("@ " + u, true);
                 document.querySelectorAll('.channel-btn').forEach(b => b.classList.remove('active'));
             };
@@ -161,26 +156,30 @@
         fetch(url).then(res => res.json()).then(msgs => msgs && msgs.forEach(m => addMessageToUI(m.content)));
     }
 
-    function send() {
-        if (!input.value.trim()) return;
-        const msg = { content: `${userName}: ${input.value}`, type: "chat" };
-        if (recipientID) { 
-            msg.is_private = true; 
-            msg.recipient_id = recipientID; 
-            msg.channel_id = userName; 
-        } else { 
-            msg.is_private = false; 
-            msg.channel_id = currentChannel; 
+    input.onkeypress = (e) => {
+        if (e.key === 'Enter' && input.value.trim()) {
+            const msg = { 
+                content: `${userName}: ${input.value}`, 
+                type: "chat",
+                channel_id: recipientID ? userName : currentChannel,
+                recipient_id: recipientID || "",
+                is_private: !!recipientID
+            };
+            socket.send(JSON.stringify(msg));
+            input.value = "";
         }
-        socket.send(JSON.stringify(msg));
-        input.value = "";
-    }
+    };
 
     function addMessageToUI(text) {
         const div = document.createElement("div"); div.className = "message";
         div.innerText = text; chat.appendChild(div); chat.scrollTop = chat.scrollHeight;
     }
-    input.onkeypress = (e) => { if(e.key === 'Enter') send() };
+
+    function loadHistory() {
+        fetch(`/api/history?channel=${currentChannel}`).then(res => res.json()).then(msgs => {
+            if(msgs) msgs.forEach(m => addMessageToUI(m.content));
+        });
+    }
 </script>
 </body>
 </html>

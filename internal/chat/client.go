@@ -36,15 +36,15 @@ func HandleWS(hub *Hub, store *data.PostgresStorage) http.HandlerFunc {
 
 		client := &Client{Conn: conn, Hub: hub, Store: store, ChannelID: channel}
 		
-		// 1. Registrar usuario
+		// Registro forzado
 		hub.Clients.Store(user, channel)
 		
-		// 2. Enviar lista de usuarios INMEDIATAMENTE al que entra
+		// Enviar lista actual al que entra
 		users := hub.GetOnlineUsers()
 		msg, _ := json.Marshal(ChatMessage{Type: "users_update", Users: users})
 		conn.WriteMessage(websocket.TextMessage, msg)
 
-		// 3. Avisar al resto
+		// Notificar al resto
 		client.broadcastUserUpdate()
 
 		go client.readFromRedis()
@@ -83,6 +83,7 @@ func (c *Client) readFromWS(userName string) {
 		var chatMsg ChatMessage
 		if err := json.Unmarshal(msgBytes, &chatMsg); err != nil { continue }
 
+		// IMPORTANTE: Solo persistir si es un mensaje de chat
 		if chatMsg.Type == "chat" || chatMsg.Type == "" {
 			c.Store.SaveMessage(context.Background(), data.Message{
 				Content:     chatMsg.Content,
@@ -91,6 +92,7 @@ func (c *Client) readFromWS(userName string) {
 				RecipientID: chatMsg.RecipientID,
 			})
 		}
+		// Retransmitir todo (incluyendo typing y users_update)
 		c.Hub.Publish(context.Background(), msgBytes)
 	}
 }
