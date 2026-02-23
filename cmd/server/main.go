@@ -18,8 +18,7 @@ func main() {
 
 	// 2. Conexión a PostgreSQL (Capa de Datos)
 	
-	// dsn := "postgres://chango_user:chango_password@localhost:5432/chango_app"
-	rdb, err := data.NewRedisClient("redis:6379")
+	dsn := "postgres://chango_user:chango_password@postgres:5432/chango_app"
 	store, err := data.NewPostgresPool(ctx, dsn)
 	if err != nil {
 		log.Fatalf("Error Postgres: %v", err)
@@ -27,7 +26,7 @@ func main() {
 	defer store.Pool.Close()
 
 	// 3. Conexión a Redis (Capa de Mensajería)
-	rdb, err := data.NewRedisClient("localhost:6379")
+	rdb, err := data.NewRedisClient("redis:6379")
 	if err != nil {
 		log.Fatalf("Error Redis: %v", err)
 	}
