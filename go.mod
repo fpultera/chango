@@ -1,4 +1,4 @@
-module github.com/fpultera/chango
+module chango
 
 go 1.25.0
 
