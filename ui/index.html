@@ -14,8 +14,12 @@
         .profile-card:hover { background: rgba(0,0,0,0.4); }
         .avatar-img { width: 35px; height: 35px; border-radius: 50%; object-fit: cover; background: #4e5058; }
         #channel-list { flex: 1; overflow-y: auto; }
-        .channel-btn { padding: 10px; border-radius: 5px; cursor: pointer; margin-bottom: 2px; }
-        .channel-btn.active { background: var(--accent); color: white; }
+        .channel-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 5px; cursor: pointer; margin-bottom: 2px; }
+        .channel-item:hover { background: rgba(255,255,255,0.05); }
+        .channel-item.active { background: var(--accent); color: white; }
+        .delete-btn { color: #949ba4; font-size: 0.8em; padding: 2px 6px; border-radius: 3px; visibility: hidden; }
+        .channel-item:hover .delete-btn { visibility: visible; }
+        .delete-btn:hover { background: var(--danger); color: white; }
         #main { flex: 1; display: flex; flex-direction: column; }
         #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
         .message { background: #383a40; padding: 10px; border-radius: 8px; max-width: 85%; align-self: flex-start; }
@@ -33,19 +37,16 @@
     </style>
 </head>
 <body>
-
 <div id="notif-container"></div>
-
 <div id="auth-overlay">
     <div class="auth-box">
         <h2 style="color: white">Chango 🐵</h2>
-        <input type="text" id="username" placeholder="Usuario (letras, núm, _)" autocomplete="off">
+        <input type="text" id="username" placeholder="Usuario" autocomplete="off">
         <input type="password" id="password" placeholder="Contraseña">
         <button onclick="auth('login')" style="width: 100%">Entrar</button>
         <button onclick="auth('register')" style="background:none; color:var(--accent); border:none; margin-top:10px; cursor:pointer">Regístrate</button>
     </div>
 </div>
-
 <div id="profile-modal">
     <div class="modal-content">
         <h3>Tu Perfil</h3>
@@ -57,11 +58,10 @@
         </div>
     </div>
 </div>
-
 <div id="sidebar">
     <div class="profile-card" onclick="document.getElementById('profile-modal').style.display='flex'">
         <img id="myAvatar" src="/static/avatars/default.png" class="avatar-img">
-        <span id="myName" style="font-weight: bold;">Cargando...</span>
+        <span id="myName">Cargando...</span>
     </div>
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
         <h4 style="margin:0">Canales</h4>
@@ -70,19 +70,16 @@
     <div id="channel-list"></div>
     <button onclick="logout()" style="margin-top:auto; background:var(--danger)">Salir</button>
 </div>
-
 <div id="main">
     <header style="padding:15px; border-bottom:1px solid #26272d; font-weight:bold;"># <span id="channelName">general</span></header>
     <div id="chat"></div>
     <div class="input-area"><input type="text" id="msgInput" placeholder="Escribe algo..." autocomplete="off"></div>
 </div>
-
 <div id="user-list"><h4>ONLINE</h4><div id="online-users"></div></div>
 
 <script>
     let currentChannel = 'general', recipientID = null;
-    let userName = localStorage.getItem('chango_user');
-    let token = localStorage.getItem('chango_token');
+    let userName = localStorage.getItem('chango_user'), token = localStorage.getItem('chango_token');
     let userAvatar = localStorage.getItem('chango_avatar') || '/static/avatars/default.png';
     const chat = document.getElementById("chat"), input = document.getElementById("msgInput");
     let socket;
@@ -90,40 +87,15 @@
     window.onload = () => { if (token) showChat(); };
 
     async function auth(type) {
-        const uField = document.getElementById("username");
-        const pField = document.getElementById("password");
-        const u = uField.value.trim();
-        const p = pField.value.trim();
-
-        if (!u || !p) return alert("Completa los campos.");
-
-        // --- VALIDACIÓN FRONTEND: Regex ---
-        const regex = /^[a-zA-Z0-9_]+$/;
-        if (!regex.test(u)) {
-            return alert("El usuario solo puede tener letras, números y guiones bajos.");
-        }
-
-        const res = await fetch(`/api/${type}`, { 
-            method: 'POST', 
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({username: u, password: p}) 
-        });
-
-        if (res.ok) {
-            if (type === 'login') {
-                const data = await res.json();
-                localStorage.setItem('chango_token', data.token);
-                localStorage.setItem('chango_user', data.username);
-                localStorage.setItem('chango_avatar', data.avatar_url);
-                userName = data.username; userAvatar = data.avatar_url;
-                showChat();
-            } else {
-                alert("¡Registrado! Ahora inicia sesión.");
-                uField.value = ""; pField.value = "";
-            }
-        } else {
-            const err = await res.text();
-            alert("Error: " + err);
+        const u = document.getElementById("username").value.trim(), p = document.getElementById("password").value.trim();
+        if(!/^[a-zA-Z0-9_]+$/.test(u)) return alert("Usuario no válido");
+        const res = await fetch(`/api/${type}`, { method: 'POST', body: JSON.stringify({username: u, password: p}) });
+        if(res.ok) {
+            if(type === 'login') {
+                const d = await res.json();
+                localStorage.setItem('chango_token', d.token); localStorage.setItem('chango_user', d.username); localStorage.setItem('chango_avatar', d.avatar_url);
+                userName = d.username; userAvatar = d.avatar_url; showChat();
+            } else alert("Registrado!");
         }
     }
 
@@ -135,16 +107,54 @@
         loadChannels(); loadHistory(); connect();
     }
 
-    async function uploadAvatar() {
-        const file = document.getElementById("avatarInput").files[0];
-        if (!file) return;
-        const fd = new FormData(); fd.append("avatar", file); fd.append("username", userName);
-        const res = await fetch('/api/upload-avatar', { method: 'POST', body: fd });
-        const data = await res.json();
-        userAvatar = data.url;
-        localStorage.setItem('chango_avatar', userAvatar);
-        document.getElementById("myAvatar").src = userAvatar;
-        document.getElementById("modalAvatar").src = userAvatar;
+    async function loadChannels() {
+        const res = await fetch('/api/channels');
+        const channels = await res.json();
+        const list = document.getElementById("channel-list");
+        list.innerHTML = "";
+        channels.forEach(c => {
+            const div = document.createElement("div");
+            div.className = `channel-item ${c.name === currentChannel ? 'active' : ''}`;
+            div.innerHTML = `<span># ${c.name}</span>`;
+            
+            // Solo añadir botón de borrar si el usuario logueado es el owner
+            if (c.owner === userName && c.name !== 'general') {
+                const del = document.createElement("span");
+                del.className = "delete-btn";
+                del.innerText = "✖";
+                del.onclick = (e) => { e.stopPropagation(); deleteChannel(c.name); };
+                div.appendChild(del);
+            }
+
+            div.onclick = () => { recipientID = null; currentChannel = c.name; switchUI(c.name, false); loadChannels(); };
+            list.appendChild(div);
+        });
+    }
+
+    async function deleteChannel(name) {
+        if (!confirm(`¿Borrar canal #${name}?`)) return;
+        const res = await fetch(`/api/channels?name=${name}&owner=${userName}`, { method: 'DELETE' });
+        if (res.ok) {
+            if (currentChannel === name) { currentChannel = 'general'; switchUI('general', false); }
+            loadChannels();
+        }
+    }
+
+    async function createNewChannel() {
+        const n = prompt("Nombre:");
+        if (n && n.trim()) {
+            await fetch('/api/channels', { 
+                method: 'POST', 
+                body: JSON.stringify({name: n.toLowerCase().trim(), owner: userName}) 
+            });
+            loadChannels();
+        }
+    }
+
+    function switchUI(label, isPrivate) {
+        document.getElementById("channelName").innerText = label; chat.innerHTML = "";
+        const url = isPrivate ? `/api/history/private?user1=${userName}&user2=${recipientID}` : `/api/history?channel=${currentChannel}`;
+        fetch(url).then(r => r.json()).then(msgs => msgs?.forEach(m => addMessageToUI(m.content)));
     }
 
     function connect() {
@@ -153,36 +163,12 @@
         socket.onmessage = (e) => {
             const data = JSON.parse(e.data);
             if (data.type === "users_update") updateUserList(data.users);
+            else if (data.type === "channels_update") loadChannels();
             else if (data.is_private) {
                 if ((data.recipient_id === userName && recipientID === data.channel_id) || (data.channel_id === userName && recipientID === data.recipient_id)) addMessageToUI(data.content);
                 else if (data.recipient_id === userName) showNotification(data.channel_id);
             } else if (data.channel_id === currentChannel) addMessageToUI(data.content);
         };
-    }
-
-    function showNotification(sender) {
-        const t = document.createElement("div"); t.className = "toast"; t.innerText = `Nuevo DM de ${sender}`;
-        t.onclick = () => { recipientID = sender; currentChannel = null; switchUI("@ " + sender, true); t.remove(); };
-        document.getElementById("notif-container").appendChild(t);
-        setTimeout(() => t.remove(), 5000);
-    }
-
-    async function loadChannels() {
-        const res = await fetch('/api/channels');
-        const channels = await res.json();
-        document.getElementById("channel-list").innerHTML = "";
-        channels.forEach(c => {
-            const d = document.createElement("div"); d.className = `channel-btn ${c.name === currentChannel ? 'active' : ''}`;
-            d.innerText = `# ${c.name}`;
-            d.onclick = () => { recipientID = null; currentChannel = c.name; switchUI(c.name, false); };
-            document.getElementById("channel-list").appendChild(d);
-        });
-    }
-
-    function switchUI(label, isPrivate) {
-        document.getElementById("channelName").innerText = label; chat.innerHTML = "";
-        const url = isPrivate ? `/api/history/private?user1=${userName}&user2=${recipientID}` : `/api/history?channel=${currentChannel}`;
-        fetch(url).then(r => r.json()).then(msgs => msgs?.forEach(m => addMessageToUI(m.content)));
     }
 
     function updateUserList(users) {
@@ -211,11 +197,24 @@
         fetch(`/api/history?channel=${currentChannel}`).then(r => r.json()).then(msgs => msgs?.forEach(m => addMessageToUI(m.content)));
     }
 
+    function showNotification(sender) {
+        const t = document.createElement("div"); t.className = "toast"; t.innerText = `DM de ${sender}`;
+        t.onclick = () => { recipientID = sender; currentChannel = null; switchUI("@ " + sender, true); t.remove(); };
+        document.getElementById("notif-container").appendChild(t);
+        setTimeout(() => t.remove(), 5000);
+    }
+
     function logout() { localStorage.clear(); window.location.reload(); }
-    async function createNewChannel() {
-        const n = prompt("Nombre:");
-        if (n && n.trim()) await fetch('/api/channels', { method: 'POST', body: JSON.stringify({name: n.toLowerCase().trim()}) });
-        loadChannels();
+    async function uploadAvatar() {
+        const file = document.getElementById("avatarInput").files[0];
+        if (!file) return;
+        const fd = new FormData(); fd.append("avatar", file); fd.append("username", userName);
+        const res = await fetch('/api/upload-avatar', { method: 'POST', body: fd });
+        const data = await res.json();
+        userAvatar = data.url;
+        localStorage.setItem('chango_avatar', userAvatar);
+        document.getElementById("myAvatar").src = userAvatar;
+        document.getElementById("modalAvatar").src = userAvatar;
     }
 </script>
 </body>

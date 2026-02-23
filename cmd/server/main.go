@@ -20,7 +20,6 @@ import (
 )
 
 var jwtSecret = []byte("secreto_chango_2026")
-// Regex: Solo permite letras (a-z, A-Z), números (0-9) y guiones bajos (_)
 var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 
 func main() {
@@ -38,45 +37,24 @@ func main() {
 		http.ServeFile(w, r, "./ui/index.html")
 	})
 
-	// API Register con Validación Anti-Caracteres Extraños
 	http.HandleFunc("/api/register", func(w http.ResponseWriter, r *http.Request) {
 		var creds struct{ Username, Password string }
-		if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
-			http.Error(w, "Datos inválidos", http.StatusBadRequest)
-			return
+		json.NewDecoder(r.Body).Decode(&creds)
+		u := strings.TrimSpace(creds.Username)
+		p := strings.TrimSpace(creds.Password)
+		if u == "" || p == "" || !usernameRegex.MatchString(u) {
+			http.Error(w, "Datos inválidos", 400); return
 		}
-
-		username := strings.TrimSpace(creds.Username)
-		password := strings.TrimSpace(creds.Password)
-
-		if username == "" || password == "" {
-			http.Error(w, "Campos obligatorios", http.StatusBadRequest)
-			return
-		}
-
-		// --- NUEVA VALIDACIÓN DE CARACTERES ---
-		if !usernameRegex.MatchString(username) {
-			http.Error(w, "El usuario solo puede contener letras, números y guiones bajos", http.StatusBadRequest)
-			return
-		}
-		// --------------------------------------
-
-		err := store.CreateUser(context.Background(), username, password)
-		if err != nil {
-			http.Error(w, "Error: El usuario ya existe", http.StatusConflict)
-			return
-		}
-		w.WriteHeader(http.StatusCreated)
+		store.CreateUser(context.Background(), u, p)
+		w.WriteHeader(201)
 	})
 
 	http.HandleFunc("/api/login", func(w http.ResponseWriter, r *http.Request) {
 		var creds struct{ Username, Password string }
 		json.NewDecoder(r.Body).Decode(&creds)
-		username := strings.TrimSpace(creds.Username)
-		u, _ := store.GetUserByUsername(context.Background(), username)
+		u, _ := store.GetUserByUsername(context.Background(), creds.Username)
 		if u == nil || bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(creds.Password)) != nil {
-			http.Error(w, "No autorizado", http.StatusUnauthorized)
-			return
+			http.Error(w, "Unauthorized", 401); return
 		}
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"username": u.Username, "exp": time.Now().Add(time.Hour * 24).Unix()})
 		tokenString, _ := token.SignedString(jwtSecret)
@@ -84,16 +62,24 @@ func main() {
 	})
 
 	http.HandleFunc("/api/channels", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
+		switch r.Method {
+		case "GET":
 			channels, _ := store.GetChannels(context.Background())
 			json.NewEncoder(w).Encode(channels)
-		} else {
-			var body struct{ Name string }
+		case "POST":
+			var body struct{ Name, Owner string }
 			json.NewDecoder(r.Body).Decode(&body)
-			name := strings.TrimSpace(body.Name)
-			if name != "" {
-				store.CreateChannel(context.Background(), name)
+			if body.Name != "" && body.Owner != "" {
+				store.CreateChannel(context.Background(), body.Name, body.Owner)
 				rdb.Publish(context.Background(), "chango_chat", `{"type":"channels_update"}`)
+			}
+		case "DELETE":
+			name := r.URL.Query().Get("name")
+			owner := r.URL.Query().Get("owner")
+			if name != "" && owner != "" {
+				store.DeleteChannel(context.Background(), name, owner)
+				rdb.Publish(context.Background(), "chango_chat", `{"type":"channels_update"}`)
+				w.WriteHeader(200)
 			}
 		}
 	})
@@ -111,12 +97,10 @@ func main() {
 	})
 
 	http.HandleFunc("/api/upload-avatar", func(w http.ResponseWriter, r *http.Request) {
-		file, header, err := r.FormFile("avatar")
-		if err != nil { http.Error(w, "Archivo no encontrado", 400); return }
+		file, header, _ := r.FormFile("avatar")
 		defer file.Close()
 		username := r.FormValue("username")
-		ext := filepath.Ext(header.Filename)
-		filename := username + "_" + time.Now().Format("150405") + ext
+		filename := username + "_" + time.Now().Format("150405") + filepath.Ext(header.Filename)
 		path := filepath.Join("./ui/static/avatars", filename)
 		dst, _ := os.Create(path)
 		defer dst.Close()
@@ -128,6 +112,6 @@ func main() {
 
 	http.HandleFunc("/ws", chat.HandleWS(hub, store))
 
-	log.Println("🚀 Chango con validación de caracteres en :8080")
+	log.Println("🚀 Chango server :8080")
 	http.ListenAndServe(":8080", nil)
 }

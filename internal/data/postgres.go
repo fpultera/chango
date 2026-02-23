@@ -24,8 +24,9 @@ type User struct {
 }
 
 type Channel struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Owner string `json:"owner"`
 }
 
 type PostgresStorage struct {
@@ -95,20 +96,26 @@ func (s *PostgresStorage) GetPrivateHistory(ctx context.Context, u1, u2 string) 
 	return messages, nil
 }
 
-func (s *PostgresStorage) CreateChannel(ctx context.Context, name string) error {
-	_, err := s.Pool.Exec(ctx, "INSERT INTO channels (name) VALUES ($1) ON CONFLICT DO NOTHING", name)
+func (s *PostgresStorage) CreateChannel(ctx context.Context, name, owner string) error {
+	_, err := s.Pool.Exec(ctx, "INSERT INTO channels (name, owner) VALUES ($1, $2) ON CONFLICT DO NOTHING", name, owner)
 	return err
 }
 
 func (s *PostgresStorage) GetChannels(ctx context.Context) ([]Channel, error) {
-	rows, err := s.Pool.Query(ctx, "SELECT id, name FROM channels ORDER BY name ASC")
+	rows, err := s.Pool.Query(ctx, "SELECT id, name, COALESCE(owner, '') FROM channels ORDER BY name ASC")
 	if err != nil { return nil, err }
 	defer rows.Close()
 	var channels []Channel
 	for rows.Next() {
 		var c Channel
-		rows.Scan(&c.ID, &c.Name)
+		rows.Scan(&c.ID, &c.Name, &c.Owner)
 		channels = append(channels, c)
 	}
 	return channels, nil
+}
+
+func (s *PostgresStorage) DeleteChannel(ctx context.Context, name, owner string) error {
+    // Solo borra si el nombre coincide Y el owner es el correcto
+	_, err := s.Pool.Exec(ctx, "DELETE FROM channels WHERE name = $1 AND owner = $2", name, owner)
+	return err
 }
