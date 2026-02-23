@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"chango/internal/chat"
@@ -25,10 +26,8 @@ func main() {
 	rdb := redis.NewClient(&redis.Options{Addr: "redis:6379"})
 	hub := &chat.Hub{RedisClient: rdb}
 
-	// Crear carpeta de avatars si no existe
 	os.MkdirAll("./ui/static/avatars", os.ModePerm)
 
-	// Servir UI y estáticos
 	fs := http.FileServer(http.Dir("./ui/static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 	
@@ -36,27 +35,66 @@ func main() {
 		http.ServeFile(w, r, "./ui/index.html")
 	})
 
-	// API Auth
+	// API Auth con Validaciones
 	http.HandleFunc("/api/register", func(w http.ResponseWriter, r *http.Request) {
 		var creds struct{ Username, Password string }
-		json.NewDecoder(r.Body).Decode(&creds)
-		store.CreateUser(context.Background(), creds.Username, creds.Password)
-		w.WriteHeader(201)
+		if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
+			http.Error(w, "Datos inválidos", http.StatusBadRequest)
+			return
+		}
+
+		// Limpiar y validar
+		username := strings.TrimSpace(creds.Username)
+		password := strings.TrimSpace(creds.Password)
+
+		if username == "" || password == "" {
+			http.Error(w, "El usuario y la contraseña son obligatorios", http.StatusBadRequest)
+			return
+		}
+
+		err := store.CreateUser(context.Background(), username, password)
+		if err != nil {
+			http.Error(w, "Error: El usuario ya existe o la base de datos falló", http.StatusConflict)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
 	})
 
 	http.HandleFunc("/api/login", func(w http.ResponseWriter, r *http.Request) {
 		var creds struct{ Username, Password string }
-		json.NewDecoder(r.Body).Decode(&creds)
-		u, _ := store.GetUserByUsername(context.Background(), creds.Username)
-		if u == nil || bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(creds.Password)) != nil {
-			http.Error(w, "Unauthorized", 401); return
+		if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
+			http.Error(w, "Datos inválidos", http.StatusBadRequest)
+			return
 		}
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"username": u.Username, "exp": time.Now().Add(time.Hour * 24).Unix()})
+
+		username := strings.TrimSpace(creds.Username)
+		password := strings.TrimSpace(creds.Password)
+
+		if username == "" || password == "" {
+			http.Error(w, "Campos incompletos", http.StatusBadRequest)
+			return
+		}
+
+		u, _ := store.GetUserByUsername(context.Background(), username)
+		if u == nil || bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)) != nil {
+			http.Error(w, "Credenciales incorrectas", http.StatusUnauthorized)
+			return
+		}
+
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"username": u.Username, 
+			"exp":      time.Now().Add(time.Hour * 24).Unix(),
+		})
 		tokenString, _ := token.SignedString(jwtSecret)
-		json.NewEncoder(w).Encode(map[string]string{"token": tokenString, "username": u.Username, "avatar_url": u.AvatarURL})
+		
+		json.NewEncoder(w).Encode(map[string]string{
+			"token":      tokenString, 
+			"username":   u.Username, 
+			"avatar_url": u.AvatarURL,
+		})
 	})
 
-	// API Canales e Historial
+	// API Canales
 	http.HandleFunc("/api/channels", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			channels, _ := store.GetChannels(context.Background())
@@ -64,8 +102,11 @@ func main() {
 		} else {
 			var body struct{ Name string }
 			json.NewDecoder(r.Body).Decode(&body)
-			store.CreateChannel(context.Background(), body.Name)
-			rdb.Publish(context.Background(), "chango_chat", `{"type":"channels_update"}`)
+			name := strings.TrimSpace(body.Name)
+			if name != "" {
+				store.CreateChannel(context.Background(), name)
+				rdb.Publish(context.Background(), "chango_chat", `{"type":"channels_update"}`)
+			}
 		}
 	})
 
@@ -81,10 +122,9 @@ func main() {
 		json.NewEncoder(w).Encode(messages)
 	})
 
-	// Subida de Avatar
 	http.HandleFunc("/api/upload-avatar", func(w http.ResponseWriter, r *http.Request) {
 		file, header, err := r.FormFile("avatar")
-		if err != nil { http.Error(w, "Error", 400); return }
+		if err != nil { http.Error(w, "Archivo no encontrado", 400); return }
 		defer file.Close()
 
 		username := r.FormValue("username")
@@ -103,6 +143,6 @@ func main() {
 
 	http.HandleFunc("/ws", chat.HandleWS(hub, store))
 
-	log.Println("🚀 Chango Perfiles en :8080")
+	log.Println("🚀 Servidor Chango Blindado corriendo en :8080")
 	http.ListenAndServe(":8080", nil)
 }

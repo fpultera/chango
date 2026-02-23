@@ -48,10 +48,10 @@
 <div id="auth-overlay">
     <div class="auth-box">
         <h2 style="color: white">Chango 🐵</h2>
-        <input type="text" id="username" placeholder="Usuario">
+        <input type="text" id="username" placeholder="Usuario" autocomplete="off">
         <input type="password" id="password" placeholder="Contraseña">
         <button onclick="auth('login')" style="width: 100%">Entrar</button>
-        <button onclick="auth('register')" style="background:none; color:var(--accent); border:none; margin-top:10px; cursor:pointer">Regístrate</button>
+        <button onclick="auth('register')" style="background:none; color:var(--accent); border:none; margin-top:10px; cursor:pointer">¿Eres nuevo? Regístrate</button>
     </div>
 </div>
 
@@ -99,8 +99,23 @@
     window.onload = () => { if (token) showChat(); };
 
     async function auth(type) {
-        const u = document.getElementById("username").value, p = document.getElementById("password").value;
-        const res = await fetch(`/api/${type}`, { method: 'POST', body: JSON.stringify({username: u, password: p}) });
+        const uField = document.getElementById("username");
+        const pField = document.getElementById("password");
+        
+        const u = uField.value.trim();
+        const p = pField.value.trim();
+
+        if (!u || !p) {
+            alert("Completa todos los campos, chango.");
+            return;
+        }
+
+        const res = await fetch(`/api/${type}`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({username: u, password: p}) 
+        });
+
         if (res.ok) {
             if (type === 'login') {
                 const data = await res.json();
@@ -109,7 +124,14 @@
                 localStorage.setItem('chango_avatar', data.avatar_url);
                 userName = data.username; userAvatar = data.avatar_url;
                 showChat();
-            } else alert("Registrado!");
+            } else {
+                alert("¡Registrado! Ahora inicia sesión con tus datos.");
+                uField.value = "";
+                pField.value = "";
+            }
+        } else {
+            const errorMsg = await res.text();
+            alert("Error: " + errorMsg);
         }
     }
 
@@ -131,7 +153,6 @@
         localStorage.setItem('chango_avatar', userAvatar);
         document.getElementById("myAvatar").src = userAvatar;
         document.getElementById("modalAvatar").src = userAvatar;
-        alert("Avatar actualizado!");
     }
 
     function connect() {
@@ -194,13 +215,14 @@
     }
 
     function loadHistory() {
+        if (!currentChannel) return;
         fetch(`/api/history?channel=${currentChannel}`).then(r => r.json()).then(msgs => msgs?.forEach(m => addMessageToUI(m.content)));
     }
 
     function logout() { localStorage.clear(); window.location.reload(); }
     async function createNewChannel() {
-        const n = prompt("Nombre:");
-        if (n) await fetch('/api/channels', { method: 'POST', body: JSON.stringify({name: n.toLowerCase()}) });
+        const n = prompt("Nombre del canal:");
+        if (n && n.trim()) await fetch('/api/channels', { method: 'POST', body: JSON.stringify({name: n.toLowerCase().trim()}) });
         loadChannels();
     }
 </script>
