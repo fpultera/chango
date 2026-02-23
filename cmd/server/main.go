@@ -2,56 +2,48 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"log"
 	"net/http"
-	"time"
 
 	"chango/internal/chat"
 	"chango/internal/data"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
-	// 1. Configuración de contexto y tiempos
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
-	// 2. Conexión a PostgreSQL (Capa de Datos)
+	// Conexiones (Usando nombres de servicio de Docker)
+	store, err := data.NewPostgresPool(ctx, "postgres://chango_user:chango_password@postgres:5432/chango_app")
+	if err != nil {
+		log.Fatal(err)
+	}
 	
-	dsn := "postgres://chango_user:chango_password@postgres:5432/chango_app"
-	store, err := data.NewPostgresPool(ctx, dsn)
-	if err != nil {
-		log.Fatalf("Error Postgres: %v", err)
-	}
-	defer store.Pool.Close()
-
-	// 3. Conexión a Redis (Capa de Mensajería)
-	rdb, err := data.NewRedisClient("redis:6379")
-	if err != nil {
-		log.Fatalf("Error Redis: %v", err)
-	}
-
-	// 4. Inicializar el Hub del Chat
+	rdb := redis.NewClient(&redis.Options{Addr: "redis:6379"})
 	hub := &chat.Hub{RedisClient: rdb}
 
-	// 5. Definición de Rutas
-	// Servir el Frontend (Ajusta la ruta según dónde estés ejecutando el binario)
+	// Rutas
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "./ui/index.html")
 	})
 
-	// Endpoint de WebSockets usando el nuevo paquete chat
+	// NUEVO: Endpoint de historial
+	http.HandleFunc("/api/history", func(w http.ResponseWriter, r *http.Request) {
+		channel := r.URL.Query().Get("channel")
+		if channel == "" { channel = "general" }
+		
+		messages, err := store.GetHistory(context.Background(), channel)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(messages)
+	})
+
 	http.HandleFunc("/ws", chat.HandleWS(hub, store))
 
-	// 6. Arrancar Servidor
-	port := ":8080"
-	fmt.Printf("🚀 Chango operativo en http://localhost%s\n", port)
-	
-	server := &http.Server{
-		Addr:         port,
-		WriteTimeout: 15 * time.Second,
-		ReadTimeout:  15 * time.Second,
-	}
-
-	log.Fatal(server.ListenAndServe())
+	log.Println("🚀 Chango con Historial en :8080")
+	http.ListenAndServe(":8080", nil)
 }

@@ -4,58 +4,105 @@
     <meta charset="UTF-8">
     <title>Chango 🐵</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #313338; color: #dbdee1; margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        header { background: #2b2d31; padding: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.2); font-weight: bold; color: white; }
+        :root { --sidebar-bg: #1e1f22; --chat-bg: #313338; --hover-bg: #35373c; --accent: #5865f2; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; height: 100vh; color: #dbdee1; }
+        
+        /* Barra Lateral */
+        #sidebar { width: 240px; background: var(--sidebar-bg); display: flex; flex-direction: column; padding: 10px; }
+        .channel-btn { padding: 10px; border-radius: 4px; cursor: pointer; margin-bottom: 2px; transition: 0.2s; }
+        .channel-btn:hover { background: var(--hover-bg); color: white; }
+        .channel-btn.active { background: var(--accent); color: white; }
+        
+        /* Área de Chat */
+        #main { flex: 1; display: flex; flex-direction: column; background: var(--chat-bg); }
+        header { padding: 15px; background: var(--chat-bg); box-shadow: 0 1px 2px rgba(0,0,0,0.5); font-weight: bold; }
         #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
-        .message { background: #383a40; padding: 10px 15px; border-radius: 5px; max-width: 70%; line-height: 1.4; }
-        .input-area { background: #2b2d31; padding: 20px; display: flex; gap: 10px; }
+        .message { background: #383a40; padding: 10px; border-radius: 8px; max-width: 80%; width: fit-content; }
+        
+        .input-area { padding: 20px; background: var(--chat-bg); display: flex; gap: 10px; }
         input { flex: 1; padding: 12px; border-radius: 8px; border: none; background: #383a40; color: white; outline: none; }
-        button { padding: 10px 25px; background: #5865f2; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
-        button:hover { background: #4752c4; }
+        button { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<header># canal-general (Chango App)</header>
+<div id="sidebar">
+    <h3 style="color: white; margin-left: 10px;">Chango 🐵</h3>
+    <div class="channel-btn active" onclick="switchChannel('general', this)"># general</div>
+    <div class="channel-btn" onclick="switchChannel('dev', this)"># dev</div>
+    <div class="channel-btn" onclick="switchChannel('random', this)"># random</div>
+</div>
 
-<div id="chat"></div>
-
-<div class="input-area">
-    <input type="text" id="msgInput" placeholder="Escribe un mensaje..." autocomplete="off">
-    <button id="sendBtn">Enviar</button>
+<div id="main">
+    <header id="channelName"># general</header>
+    <div id="chat"></div>
+    <div class="input-area">
+        <input type="text" id="msgInput" placeholder="Enviar mensaje..." autocomplete="off">
+        <button onclick="send()">Enviar</button>
+    </div>
 </div>
 
 <script>
-    // Preguntamos un nombre para identificar al usuario
-    const userName = prompt("¿Cuál es tu nombre de chango?", "Invitado") || "Anónimo";
+    let currentChannel = 'general';
+    const userName = prompt("Tu nombre:", "Chango") || "Anónimo";
     const chat = document.getElementById("chat");
     const input = document.getElementById("msgInput");
-    const btn = document.getElementById("sendBtn");
+    let socket;
 
-    const socket = new WebSocket("ws://" + window.location.host + "/ws");
+    function connect() {
+        if (socket) socket.close();
+        socket = new WebSocket(`ws://${window.location.host}/ws?channel=${currentChannel}`);
+        
+        socket.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if (data.channel_id === currentChannel) {
+                addMessageToUI(data.content);
+            }
+        };
+    }
 
-    socket.onmessage = function(event) {
-        const msgDiv = document.createElement("div");
-        msgDiv.className = "message";
-        msgDiv.innerHTML = `<b style="color: #fff">${event.data.split(': ')[0]}:</b> ${event.data.split(': ')[1] || event.data}`;
-        chat.appendChild(msgDiv);
+    function switchChannel(channel, el) {
+        currentChannel = channel;
+        document.getElementById("channelName").innerText = "# " + channel;
+        document.querySelectorAll('.channel-btn').forEach(btn => btn.classList.remove('active'));
+        el.classList.add('active');
+        
+        chat.innerHTML = ""; // Limpiar vista
+        loadHistory();       // Cargar mensajes viejos
+        connect();           // Reconectar socket al nuevo canal
+    }
+
+    function loadHistory() {
+        fetch(`/api/history?channel=${currentChannel}`)
+            .then(res => res.json())
+            .then(messages => {
+                if(messages) messages.forEach(m => addMessageToUI(m.content));
+            });
+    }
+
+    function addMessageToUI(text) {
+        const div = document.createElement("div");
+        div.className = "message";
+        div.innerText = text;
+        chat.appendChild(div);
         chat.scrollTop = chat.scrollHeight;
-    };
+    }
 
-    function sendMessage() {
-        if (input.value.trim() !== "") {
-            // Enviamos el mensaje con el formato "Nombre: Mensaje"
-            socket.send(`${userName}: ${input.value}`);
+    function send() {
+        if (input.value) {
+            socket.send(JSON.stringify({
+                content: `${userName}: ${input.value}`,
+                channel_id: currentChannel
+            }));
             input.value = "";
         }
     }
 
-    btn.onclick = sendMessage;
-    input.onkeypress = (e) => { if(e.key === 'Enter') sendMessage() };
-
-    socket.onopen = () => console.log("Conectado al servidor de Chango");
-    socket.onclose = () => alert("Conexión perdida con el servidor.");
+    input.onkeypress = (e) => { if(e.key === 'Enter') send() };
+    
+    // Inicio
+    loadHistory();
+    connect();
 </script>
-
 </body>
 </html>

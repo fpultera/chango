@@ -2,46 +2,52 @@ package chat
 
 import (
 	"context"
-	"log"
+	"encoding/json"
 	"net/http"
-
-	"chango/internal/data" // Ajusta según tu go.mod
+	"chango/internal/data"
 	"github.com/gorilla/websocket"
 )
 
+// Definimos el upgrader aquí para que no de error de "undefined"
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// Client representa la conexión de un usuario
-type Client struct {
-	Conn  *websocket.Conn
-	Hub   *Hub
-	Store *data.PostgresStorage
+type ChatMessage struct {
+	Content   string `json:"content"`
+	ChannelID string `json:"channel_id"`
 }
 
-// HandleWS es el constructor de la conexión
+type Client struct {
+	Conn      *websocket.Conn
+	Hub       *Hub
+	Store     *data.PostgresStorage
+	ChannelID string
+}
+
 func HandleWS(hub *Hub, store *data.PostgresStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		channel := r.URL.Query().Get("channel")
+		if channel == "" {
+			channel = "general"
+		}
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Printf("Error upgrade: %v", err)
 			return
 		}
 
 		client := &Client{
-			Conn:  conn,
-			Hub:   hub,
-			Store: store,
+			Conn:      conn,
+			Hub:       hub,
+			Store:     store,
+			ChannelID: channel,
 		}
-
-		// Lanzar procesos de escucha
 		go client.readFromRedis()
 		go client.readFromWS()
 	}
 }
 
-// Lee de Redis y envía al navegador del usuario
 func (c *Client) readFromRedis() {
 	ctx := context.Background()
 	pubsub := c.Hub.Subscribe(ctx)
@@ -53,29 +59,36 @@ func (c *Client) readFromRedis() {
 		if err != nil {
 			return
 		}
+		
 		if err := c.Conn.WriteMessage(websocket.TextMessage, []byte(msg.Payload)); err != nil {
 			return
 		}
 	}
 }
 
-// Lee del navegador del usuario y envía a Redis + Postgres
 func (c *Client) readFromWS() {
 	defer c.Conn.Close()
 
 	for {
-		_, msg, err := c.Conn.ReadMessage()
+		_, msgBytes, err := c.Conn.ReadMessage()
 		if err != nil {
 			break
 		}
 
-		// Persistir en Postgres
-		ctx := context.Background()
-		if err := c.Store.SaveMessage(ctx, string(msg)); err != nil {
-			log.Printf("Error persistiendo: %v", err)
+		var chatMsg ChatMessage
+		if err := json.Unmarshal(msgBytes, &chatMsg); err != nil {
+			continue
 		}
 
-		// Publicar en Redis
-		c.Hub.Publish(ctx, string(msg))
+		// Si el mensaje viene sin canal (por compatibilidad), usamos el del cliente
+		if chatMsg.ChannelID == "" {
+			chatMsg.ChannelID = c.ChannelID
+		}
+
+		// Guardar en Postgres
+		c.Store.SaveMessage(context.Background(), chatMsg.Content, chatMsg.ChannelID)
+
+		// Publicar en Redis para el resto de los usuarios
+		c.Hub.Publish(context.Background(), msgBytes)
 	}
 }
