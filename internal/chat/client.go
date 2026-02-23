@@ -85,7 +85,8 @@ func (c *Client) readFromWS(userName string) {
 				chatMsg.Sender = userName
 			}
 
-			// GUARDADO CON FORMATO PARA EL JOIN
+			// El channel_id en DMs es el emisor para el receptor.
+			// Guardado con formato para el historial
 			fullContent := userName + ": " + chatMsg.Content
 			c.Store.SaveMessage(context.Background(), data.Message{
 				Content:     fullContent,
@@ -94,6 +95,7 @@ func (c *Client) readFromWS(userName string) {
 				RecipientID: chatMsg.RecipientID,
 			})
 			
+			// Retransmitimos con los datos del emisor
 			msgBytes, _ = json.Marshal(chatMsg)
 		}
 

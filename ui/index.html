@@ -4,41 +4,63 @@
     <meta charset="UTF-8">
     <title>Chango 🐵</title>
     <style>
-        :root { --sidebar-bg: #1e1f22; --chat-bg: #313338; --accent: #5865f2; --danger: #da373c; }
+        :root { --sidebar-bg: #1e1f22; --chat-bg: #313338; --accent: #5865f2; --danger: #da373c; --hover: #35373c; }
         body { font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; height: 100vh; color: #dbdee1; background: var(--chat-bg); overflow: hidden; }
+        
         #auth-overlay { position: fixed; inset: 0; background: #1e1f22; z-index: 500; display: flex; align-items: center; justify-content: center; }
         .auth-box { background: #313338; padding: 30px; border-radius: 8px; width: 300px; text-align: center; }
         .auth-box input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 4px; border: none; background: #1e1f22; color: white; box-sizing: border-box; }
+
         #sidebar { width: 220px; background: var(--sidebar-bg); padding: 15px; display: flex; flex-direction: column; }
         .profile-card { display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; margin-bottom: 20px; cursor: pointer; }
         .avatar-img { width: 35px; height: 35px; border-radius: 50%; object-fit: cover; background: #4e5058; flex-shrink: 0; }
+        
         #channel-list { flex: 1; overflow-y: auto; }
         .channel-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 5px; cursor: pointer; margin-bottom: 2px; }
         .channel-item.active { background: var(--accent); color: white; }
         .delete-btn { color: #949ba4; font-size: 0.8em; visibility: hidden; }
         .channel-item:hover .delete-btn { visibility: visible; }
+
         #main { flex: 1; display: flex; flex-direction: column; }
         #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+        
         .msg-wrapper { display: flex; gap: 12px; align-items: flex-start; max-width: 85%; }
         .msg-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
         .msg-body { display: flex; flex-direction: column; gap: 4px; }
         .msg-sender { font-weight: bold; color: white; font-size: 0.95em; }
         .msg-content { background: #383a40; padding: 10px; border-radius: 0 12px 12px 12px; line-height: 1.4; word-break: break-word; }
+
         #user-list { width: 180px; background: var(--sidebar-bg); padding: 15px; border-left: 1px solid #26272d; }
         .user-item { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; cursor: pointer; font-size: 0.9em; }
         .dot { width: 8px; height: 8px; background: #23a55a; border-radius: 50%; }
+
         .input-area { padding: 20px; }
         #msgInput { width: 100%; padding: 12px; border-radius: 8px; border: none; background: #383a40; color: white; outline: none; box-sizing: border-box; }
+
         #profile-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 600; display: none; align-items: center; justify-content: center; }
         .modal-content { background: var(--chat-bg); padding: 30px; border-radius: 12px; width: 300px; text-align: center; }
-        #notif-container { position: fixed; top: 20px; right: 20px; z-index: 1000; }
-        .toast { background: var(--accent); color: white; padding: 12px; border-radius: 8px; margin-bottom: 10px; cursor: pointer; animation: slide 0.3s; }
+
+        /* NOTIFICACIONES */
+        #notif-container { position: fixed; top: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
+        .toast { 
+            background: var(--accent); 
+            color: white; 
+            padding: 12px 18px; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+            animation: slideIn 0.3s ease-out;
+            border-left: 4px solid #fff;
+        }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
         button { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div id="notif-container"></div>
+
 <div id="auth-overlay">
     <div class="auth-box">
         <h2 style="color: white">Chango 🐵</h2>
@@ -126,26 +148,13 @@
                 del.onclick = (e) => { e.stopPropagation(); deleteChannel(c.name); };
                 div.appendChild(del);
             }
-            div.onclick = () => { recipientID = null; currentChannel = c.name; switchUI(c.name, false); loadChannels(); };
+            div.onclick = () => { 
+                recipientID = null; currentChannel = c.name; 
+                switchUI(c.name, false); 
+                loadChannels(); 
+            };
             list.appendChild(div);
         });
-    }
-
-    async function deleteChannel(name) {
-        if (!confirm(`¿Borrar canal #${name}?`)) return;
-        const res = await fetch(`/api/channels?name=${name}&owner=${userName}`, { method: 'DELETE' });
-        if (res.ok) {
-            if (currentChannel === name) { currentChannel = 'general'; switchUI('general', false); }
-            loadChannels();
-        }
-    }
-
-    async function createNewChannel() {
-        const n = prompt("Nombre:");
-        if (n && n.trim()) {
-            await fetch('/api/channels', { method: 'POST', body: JSON.stringify({name: n.toLowerCase().trim(), owner: userName}) });
-            loadChannels();
-        }
     }
 
     function switchUI(label, isPrivate) {
@@ -162,10 +171,34 @@
             if (data.type === "users_update") updateUserList(data.users);
             else if (data.type === "channels_update") loadChannels();
             else if (data.is_private) {
-                if ((data.recipient_id === userName && recipientID === data.channel_id) || (data.channel_id === userName && recipientID === data.recipient_id)) addMessageToUI(data);
-                else if (data.recipient_id === userName) showNotification(data.channel_id);
-            } else if (data.channel_id === currentChannel) addMessageToUI(data);
+                // Lógica de Mensajes Directos (DM)
+                if ((data.recipient_id === userName && recipientID === data.channel_id) || (data.channel_id === userName && recipientID === data.recipient_id)) {
+                    addMessageToUI(data);
+                } else if (data.recipient_id === userName) {
+                    showGlobalNotification(`Nuevo DM de ${data.channel_id}`, () => {
+                        recipientID = data.channel_id; currentChannel = null; switchUI("@ " + data.channel_id, true);
+                    });
+                }
+            } else {
+                // Lógica de Canales Públicos
+                if (data.channel_id === currentChannel) {
+                    addMessageToUI(data);
+                } else if (data.sender !== userName && data.sender !== 'Sistema') {
+                    showGlobalNotification(`Nuevo mensaje en #${data.channel_id}`, () => {
+                        recipientID = null; currentChannel = data.channel_id; switchUI(data.channel_id, false); loadChannels();
+                    });
+                }
+            }
         };
+    }
+
+    function showGlobalNotification(text, callback) {
+        const t = document.createElement("div");
+        t.className = "toast";
+        t.innerText = text;
+        t.onclick = () => { callback(); t.remove(); };
+        document.getElementById("notif-container").appendChild(t);
+        setTimeout(() => t.remove(), 6000);
     }
 
     function updateUserList(users) {
@@ -208,13 +241,6 @@
         fetch(`/api/history?channel=${currentChannel}`).then(r => r.json()).then(msgs => msgs?.forEach(m => addMessageToUI(m)));
     }
 
-    function showNotification(sender) {
-        const t = document.createElement("div"); t.className = "toast"; t.innerText = `DM de ${sender}`;
-        t.onclick = () => { recipientID = sender; currentChannel = null; switchUI("@ " + sender, true); t.remove(); };
-        document.getElementById("notif-container").appendChild(t);
-        setTimeout(() => t.remove(), 5000);
-    }
-
     function logout() { localStorage.clear(); window.location.reload(); }
     
     async function uploadAvatar() {
@@ -227,6 +253,23 @@
         localStorage.setItem('chango_avatar', userAvatar);
         document.getElementById("myAvatar").src = userAvatar;
         document.getElementById("modalAvatar").src = userAvatar;
+    }
+
+    async function createNewChannel() {
+        const n = prompt("Nombre:");
+        if (n && n.trim()) {
+            await fetch('/api/channels', { method: 'POST', body: JSON.stringify({name: n.toLowerCase().trim(), owner: userName}) });
+            loadChannels();
+        }
+    }
+
+    async function deleteChannel(name) {
+        if (!confirm(`¿Borrar canal #${name}?`)) return;
+        const res = await fetch(`/api/channels?name=${name}&owner=${userName}`, { method: 'DELETE' });
+        if (res.ok) {
+            if (currentChannel === name) { currentChannel = 'general'; switchUI('general', false); }
+            loadChannels();
+        }
     }
 </script>
 </body>
