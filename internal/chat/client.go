@@ -8,15 +8,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
+var upgrader = websocket.Upgrader{ CheckOrigin: func(r *http.Request) bool { return true } }
 
 type ChatMessage struct {
-	Type      string   `json:"type"` 
-	Content   string   `json:"content"`
-	ChannelID string   `json:"channel_id"`
-	Users     []string `json:"users,omitempty"`
+	Type        string   `json:"type"`
+	Content     string   `json:"content"`
+	ChannelID   string   `json:"channel_id"`
+	RecipientID string   `json:"recipient_id,omitempty"`
+	IsPrivate   bool     `json:"is_private"`
+	Users       []string `json:"users,omitempty"`
 }
 
 type Client struct {
@@ -30,26 +30,21 @@ func HandleWS(hub *Hub, store *data.PostgresStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		channel := r.URL.Query().Get("channel")
 		user := r.URL.Query().Get("user")
-		if channel == "" { channel = "general" }
-		if user == "" { user = "Anonimo" }
-
+		
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil { return }
 
 		client := &Client{Conn: conn, Hub: hub, Store: store, ChannelID: channel}
-
-		// 1. REGISTRAR al usuario
+		
+		// 1. Registrar usuario
 		hub.Clients.Store(user, channel)
+		
+		// 2. Enviar lista de usuarios INMEDIATAMENTE al que entra
+		users := hub.GetOnlineUsers()
+		msg, _ := json.Marshal(ChatMessage{Type: "users_update", Users: users})
+		conn.WriteMessage(websocket.TextMessage, msg)
 
-		// 2. SINCRONIZACIÓN INICIAL (Unicast: Solo a este nuevo usuario)
-		initialUsers := hub.GetOnlineUsers()
-		initialMsg, _ := json.Marshal(ChatMessage{
-			Type:  "users_update",
-			Users: initialUsers,
-		})
-		conn.WriteMessage(websocket.TextMessage, initialMsg)
-
-		// 3. AVISAR AL RESTO (Broadcast vía Redis)
+		// 3. Avisar al resto
 		client.broadcastUserUpdate()
 
 		go client.readFromRedis()
@@ -59,10 +54,7 @@ func HandleWS(hub *Hub, store *data.PostgresStorage) http.HandlerFunc {
 
 func (c *Client) broadcastUserUpdate() {
 	users := c.Hub.GetOnlineUsers()
-	msg, _ := json.Marshal(ChatMessage{
-		Type:  "users_update",
-		Users: users,
-	})
+	msg, _ := json.Marshal(ChatMessage{Type: "users_update", Users: users})
 	c.Hub.Publish(context.Background(), msg)
 }
 
@@ -70,8 +62,6 @@ func (c *Client) readFromRedis() {
 	ctx := context.Background()
 	pubsub := c.Hub.Subscribe(ctx)
 	defer pubsub.Close()
-	defer c.Conn.Close()
-
 	for {
 		msg, err := pubsub.ReceiveMessage(ctx)
 		if err != nil { return }
@@ -91,12 +81,15 @@ func (c *Client) readFromWS(userName string) {
 		if err != nil { break }
 
 		var chatMsg ChatMessage
-		if err := json.Unmarshal(msgBytes, &chatMsg); err != nil {
-			continue
-		}
+		if err := json.Unmarshal(msgBytes, &chatMsg); err != nil { continue }
 
 		if chatMsg.Type == "chat" || chatMsg.Type == "" {
-			c.Store.SaveMessage(context.Background(), chatMsg.Content, chatMsg.ChannelID)
+			c.Store.SaveMessage(context.Background(), data.Message{
+				Content:     chatMsg.Content,
+				ChannelID:   chatMsg.ChannelID,
+				IsPrivate:   chatMsg.IsPrivate,
+				RecipientID: chatMsg.RecipientID,
+			})
 		}
 		c.Hub.Publish(context.Background(), msgBytes)
 	}
