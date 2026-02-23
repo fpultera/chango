@@ -99,8 +99,3 @@ Para borrar los contenedores (los volúmenes persistirán):
 docker compose down
 ```
 ---
-
-### Notas adicionales para ti:
-
-1.  **El archivo `.gitkeep`:** Te recomiendo poner un archivo vacío llamado `.gitkeep` dentro de `ui/static/avatars/` y subirlo al repo. Esto asegura que la carpeta exista en Git pero el contenido (las fotos) se ignore gracias al `.gitignore`.
-2.  **Uso de las Queries:** Las queries que puse en el README consolidan **todo** lo que fuimos agregando (la columna `owner`, el `avatar_url`, etc.). Si alguien corre eso en una DB limpia, el proyecto sale andando de una.
