@@ -17,22 +17,25 @@ Chango es una aplicación de chat moderna que soporta canales públicos, mensaje
 ```bash
 git clone [https://github.com/fpultera/chango.git](https://github.com/fpultera/chango.git)
 cd chango
+```
 2. Preparar el entorno
 Asegúrate de tener instalado Docker y Docker Compose.
 
 Crea la carpeta para los avatares para asegurar que los volúmenes funcionen correctamente:
 
-Bash
+```Bash
 mkdir -p ui/static/avatars
+```
 3. Levantar los servicios
 Este comando descargará las imágenes, compilará la app de Go y levantará las bases de datos:
 
-Bash
+```Bash
 docker compose up --build -d
+```
 🗄️ Configuración de la Base de Datos
 Una vez que los contenedores estén corriendo, debes ejecutar las siguientes queries para preparar las tablas. Puedes hacerlo ejecutando este comando en tu terminal:
 
-Bash
+```Bash
 docker exec -it chango_db psql -U chango_user -d chango_app -c "
 -- Tabla de Usuarios
 CREATE TABLE IF NOT EXISTS users (
@@ -58,10 +61,12 @@ CREATE TABLE IF NOT EXISTS messages (
     recipient_id TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+```
 
 -- Canal por defecto
+```bash
 INSERT INTO channels (name, owner) VALUES ('general', 'system') ON CONFLICT DO NOTHING;
-"
+```
 📋 Funcionalidades Implementadas
 Auth: Registro y Login con validación de caracteres (Regex) y contraseñas encriptadas (bcrypt).
 
@@ -85,13 +90,14 @@ Real-time: Actualización instantánea de lista de usuarios online y mensajes v�
 🛑 Detener la aplicación
 Para apagar los servicios manteniendo los datos:
 
-Bash
+```Bash
 docker compose stop
+```
 Para borrar los contenedores (los volúmenes persistirán):
 
-Bash
+```Bash
 docker compose down
-
+```
 ---
 
 ### Notas adicionales para ti:
