@@ -8,14 +8,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// Definimos el upgrader aquí para que no de error de "undefined"
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
 type ChatMessage struct {
-	Content   string `json:"content"`
-	ChannelID string `json:"channel_id"`
+	Type      string   `json:"type"` // "chat", "typing", "stop_typing", "users_update"
+	Content   string   `json:"content"`
+	ChannelID string   `json:"channel_id"`
+	Users     []string `json:"users,omitempty"`
 }
 
 type Client struct {
@@ -28,24 +29,31 @@ type Client struct {
 func HandleWS(hub *Hub, store *data.PostgresStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		channel := r.URL.Query().Get("channel")
-		if channel == "" {
-			channel = "general"
-		}
+		user := r.URL.Query().Get("user")
+		if channel == "" { channel = "general" }
+		if user == "" { user = "Anonimo" }
 
 		conn, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			return
-		}
+		if err != nil { return }
 
-		client := &Client{
-			Conn:      conn,
-			Hub:       hub,
-			Store:     store,
-			ChannelID: channel,
-		}
+		client := &Client{Conn: conn, Hub: hub, Store: store, ChannelID: channel}
+
+		// Registrar usuario y avisar a todos
+		hub.Clients.Store(user, channel)
+		client.broadcastUserUpdate()
+
 		go client.readFromRedis()
-		go client.readFromWS()
+		go client.readFromWS(user)
 	}
+}
+
+func (c *Client) broadcastUserUpdate() {
+	users := c.Hub.GetOnlineUsers()
+	msg, _ := json.Marshal(ChatMessage{
+		Type:  "users_update",
+		Users: users,
+	})
+	c.Hub.Publish(context.Background(), msg)
 }
 
 func (c *Client) readFromRedis() {
@@ -56,39 +64,30 @@ func (c *Client) readFromRedis() {
 
 	for {
 		msg, err := pubsub.ReceiveMessage(ctx)
-		if err != nil {
-			return
-		}
-		
-		if err := c.Conn.WriteMessage(websocket.TextMessage, []byte(msg.Payload)); err != nil {
-			return
-		}
+		if err != nil { return }
+		c.Conn.WriteMessage(websocket.TextMessage, []byte(msg.Payload))
 	}
 }
 
-func (c *Client) readFromWS() {
-	defer c.Conn.Close()
+func (c *Client) readFromWS(userName string) {
+	defer func() {
+		c.Hub.Clients.Delete(userName)
+		c.broadcastUserUpdate()
+		c.Conn.Close()
+	}()
 
 	for {
 		_, msgBytes, err := c.Conn.ReadMessage()
-		if err != nil {
-			break
-		}
+		if err != nil { break }
 
 		var chatMsg ChatMessage
 		if err := json.Unmarshal(msgBytes, &chatMsg); err != nil {
 			continue
 		}
 
-		// Si el mensaje viene sin canal (por compatibilidad), usamos el del cliente
-		if chatMsg.ChannelID == "" {
-			chatMsg.ChannelID = c.ChannelID
+		if chatMsg.Type == "chat" || chatMsg.Type == "" {
+			c.Store.SaveMessage(context.Background(), chatMsg.Content, chatMsg.ChannelID)
 		}
-
-		// Guardar en Postgres
-		c.Store.SaveMessage(context.Background(), chatMsg.Content, chatMsg.ChannelID)
-
-		// Publicar en Redis para el resto de los usuarios
 		c.Hub.Publish(context.Background(), msgBytes)
 	}
 }
