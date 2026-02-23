@@ -17,6 +17,8 @@ type ChatMessage struct {
 	RecipientID string   `json:"recipient_id,omitempty"`
 	IsPrivate   bool     `json:"is_private"`
 	Users       []string `json:"users,omitempty"`
+	AvatarURL   string   `json:"avatar_url,omitempty"` // Nueva propiedad
+	Sender      string   `json:"sender,omitempty"`     // Para separar nombre de contenido
 }
 
 type Client struct {
@@ -30,21 +32,14 @@ func HandleWS(hub *Hub, store *data.PostgresStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		channel := r.URL.Query().Get("channel")
 		user := r.URL.Query().Get("user")
-		
-		conn, err := upgrader.Upgrade(w, r, nil)
-		if err != nil { return }
+		conn, _ := upgrader.Upgrade(w, r, nil)
 
 		client := &Client{Conn: conn, Hub: hub, Store: store, ChannelID: channel}
-		
-		// Registrar usuario en el mapa global
 		hub.Clients.Store(user, channel)
 		
-		// Enviar lista de usuarios actual inmediatamente al nuevo cliente
-		users := hub.GetOnlineUsers()
-		msg, _ := json.Marshal(ChatMessage{Type: "users_update", Users: users})
-		conn.WriteMessage(websocket.TextMessage, msg)
-
-		// Notificar a todos los demás clientes
+		initialUsers := hub.GetOnlineUsers()
+		initialMsg, _ := json.Marshal(ChatMessage{Type: "users_update", Users: initialUsers})
+		conn.WriteMessage(websocket.TextMessage, initialMsg)
 		client.broadcastUserUpdate()
 
 		go client.readFromRedis()
@@ -81,19 +76,27 @@ func (c *Client) readFromWS(userName string) {
 		if err != nil { break }
 
 		var chatMsg ChatMessage
-		if err := json.Unmarshal(msgBytes, &chatMsg); err != nil { continue }
+		json.Unmarshal(msgBytes, &chatMsg)
 
-		// Persistir mensajes de chat (públicos y DMs)
 		if chatMsg.Type == "chat" || chatMsg.Type == "" {
+			// BUSCAMOS EL AVATAR DEL REMITENTE EN LA DB
+			u, err := c.Store.GetUserByUsername(context.Background(), userName)
+			if err == nil {
+				chatMsg.AvatarURL = u.AvatarURL
+				chatMsg.Sender = userName
+			}
+
 			c.Store.SaveMessage(context.Background(), data.Message{
 				Content:     chatMsg.Content,
 				ChannelID:   chatMsg.ChannelID,
 				IsPrivate:   chatMsg.IsPrivate,
 				RecipientID: chatMsg.RecipientID,
 			})
+			
+			// Serializamos de nuevo con el AvatarURL incluido
+			msgBytes, _ = json.Marshal(chatMsg)
 		}
-		
-		// Retransmisión vía Redis
+
 		c.Hub.Publish(context.Background(), msgBytes)
 	}
 }

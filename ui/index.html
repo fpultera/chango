@@ -6,37 +6,48 @@
     <style>
         :root { --sidebar-bg: #1e1f22; --chat-bg: #313338; --accent: #5865f2; --danger: #da373c; }
         body { font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; height: 100vh; color: #dbdee1; background: var(--chat-bg); overflow: hidden; }
+        
         #auth-overlay { position: fixed; inset: 0; background: #1e1f22; z-index: 500; display: flex; align-items: center; justify-content: center; }
         .auth-box { background: #313338; padding: 30px; border-radius: 8px; width: 300px; text-align: center; }
         .auth-box input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 4px; border: none; background: #1e1f22; color: white; box-sizing: border-box; }
+
         #sidebar { width: 220px; background: var(--sidebar-bg); padding: 15px; display: flex; flex-direction: column; }
         .profile-card { display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; margin-bottom: 20px; cursor: pointer; }
-        .profile-card:hover { background: rgba(0,0,0,0.4); }
-        .avatar-img { width: 35px; height: 35px; border-radius: 50%; object-fit: cover; background: #4e5058; }
+        .avatar-img { width: 35px; height: 35px; border-radius: 50%; object-fit: cover; background: #4e5058; flex-shrink: 0; }
+        
         #channel-list { flex: 1; overflow-y: auto; }
         .channel-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 5px; cursor: pointer; margin-bottom: 2px; }
-        .channel-item:hover { background: rgba(255,255,255,0.05); }
         .channel-item.active { background: var(--accent); color: white; }
-        .delete-btn { color: #949ba4; font-size: 0.8em; padding: 2px 6px; border-radius: 3px; visibility: hidden; }
+        .delete-btn { color: #949ba4; font-size: 0.8em; visibility: hidden; }
         .channel-item:hover .delete-btn { visibility: visible; }
-        .delete-btn:hover { background: var(--danger); color: white; }
+
         #main { flex: 1; display: flex; flex-direction: column; }
-        #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
-        .message { background: #383a40; padding: 10px; border-radius: 8px; max-width: 85%; align-self: flex-start; }
+        #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+        
+        /* ESTILO MENSAJE CON AVATAR */
+        .msg-wrapper { display: flex; gap: 12px; align-items: flex-start; max-width: 85%; }
+        .msg-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+        .msg-body { display: flex; flex-direction: column; gap: 4px; }
+        .msg-header { display: flex; align-items: center; gap: 8px; }
+        .msg-sender { font-weight: bold; color: white; font-size: 0.95em; }
+        .msg-content { background: #383a40; padding: 10px; border-radius: 0 12px 12px 12px; line-height: 1.4; }
+
         #user-list { width: 180px; background: var(--sidebar-bg); padding: 15px; border-left: 1px solid #26272d; }
         .user-item { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; cursor: pointer; font-size: 0.9em; }
         .dot { width: 8px; height: 8px; background: #23a55a; border-radius: 50%; }
+
         .input-area { padding: 20px; }
         #msgInput { width: 100%; padding: 12px; border-radius: 8px; border: none; background: #383a40; color: white; outline: none; box-sizing: border-box; }
+
         #profile-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 600; display: none; align-items: center; justify-content: center; }
         .modal-content { background: var(--chat-bg); padding: 30px; border-radius: 12px; width: 300px; text-align: center; }
         #notif-container { position: fixed; top: 20px; right: 20px; z-index: 1000; }
         .toast { background: var(--accent); color: white; padding: 12px; border-radius: 8px; margin-bottom: 10px; cursor: pointer; animation: slide 0.3s; }
-        @keyframes slide { from { transform: translateX(100%); } to { transform: translateX(0); } }
         button { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
+
 <div id="notif-container"></div>
 <div id="auth-overlay">
     <div class="auth-box">
@@ -47,6 +58,7 @@
         <button onclick="auth('register')" style="background:none; color:var(--accent); border:none; margin-top:10px; cursor:pointer">Regístrate</button>
     </div>
 </div>
+
 <div id="profile-modal">
     <div class="modal-content">
         <h3>Tu Perfil</h3>
@@ -58,6 +70,7 @@
         </div>
     </div>
 </div>
+
 <div id="sidebar">
     <div class="profile-card" onclick="document.getElementById('profile-modal').style.display='flex'">
         <img id="myAvatar" src="/static/avatars/default.png" class="avatar-img">
@@ -68,13 +81,15 @@
         <button onclick="createNewChannel()" style="padding:2px 8px; font-size:1.2em;">+</button>
     </div>
     <div id="channel-list"></div>
-    <button onclick="logout()" style="margin-top:auto; background:var(--danger)">Salir</button>
+    <button onclick="logout()" style="margin-top:auto; background:var(--danger); border:none; color:white; padding:8px; border-radius:4px; cursor:pointer;">Salir</button>
 </div>
+
 <div id="main">
     <header style="padding:15px; border-bottom:1px solid #26272d; font-weight:bold;"># <span id="channelName">general</span></header>
     <div id="chat"></div>
     <div class="input-area"><input type="text" id="msgInput" placeholder="Escribe algo..." autocomplete="off"></div>
 </div>
+
 <div id="user-list"><h4>ONLINE</h4><div id="online-users"></div></div>
 
 <script>
@@ -116,16 +131,11 @@
             const div = document.createElement("div");
             div.className = `channel-item ${c.name === currentChannel ? 'active' : ''}`;
             div.innerHTML = `<span># ${c.name}</span>`;
-            
-            // Solo añadir botón de borrar si el usuario logueado es el owner
             if (c.owner === userName && c.name !== 'general') {
-                const del = document.createElement("span");
-                del.className = "delete-btn";
-                del.innerText = "✖";
+                const del = document.createElement("span"); del.className = "delete-btn"; del.innerText = "✖";
                 del.onclick = (e) => { e.stopPropagation(); deleteChannel(c.name); };
                 div.appendChild(del);
             }
-
             div.onclick = () => { recipientID = null; currentChannel = c.name; switchUI(c.name, false); loadChannels(); };
             list.appendChild(div);
         });
@@ -143,10 +153,7 @@
     async function createNewChannel() {
         const n = prompt("Nombre:");
         if (n && n.trim()) {
-            await fetch('/api/channels', { 
-                method: 'POST', 
-                body: JSON.stringify({name: n.toLowerCase().trim(), owner: userName}) 
-            });
+            await fetch('/api/channels', { method: 'POST', body: JSON.stringify({name: n.toLowerCase().trim(), owner: userName}) });
             loadChannels();
         }
     }
@@ -154,7 +161,7 @@
     function switchUI(label, isPrivate) {
         document.getElementById("channelName").innerText = label; chat.innerHTML = "";
         const url = isPrivate ? `/api/history/private?user1=${userName}&user2=${recipientID}` : `/api/history?channel=${currentChannel}`;
-        fetch(url).then(r => r.json()).then(msgs => msgs?.forEach(m => addMessageToUI(m.content)));
+        fetch(url).then(r => r.json()).then(msgs => msgs?.forEach(m => addMessageToUI(m)));
     }
 
     function connect() {
@@ -165,9 +172,9 @@
             if (data.type === "users_update") updateUserList(data.users);
             else if (data.type === "channels_update") loadChannels();
             else if (data.is_private) {
-                if ((data.recipient_id === userName && recipientID === data.channel_id) || (data.channel_id === userName && recipientID === data.recipient_id)) addMessageToUI(data.content);
+                if ((data.recipient_id === userName && recipientID === data.channel_id) || (data.channel_id === userName && recipientID === data.recipient_id)) addMessageToUI(data);
                 else if (data.recipient_id === userName) showNotification(data.channel_id);
-            } else if (data.channel_id === currentChannel) addMessageToUI(data.content);
+            } else if (data.channel_id === currentChannel) addMessageToUI(data);
         };
     }
 
@@ -183,18 +190,35 @@
 
     input.onkeypress = (e) => {
         if (e.key === 'Enter' && input.value.trim()) {
-            const m = { content: `${userName}: ${input.value}`, channel_id: recipientID ? userName : currentChannel, recipient_id: recipientID || "", is_private: !!recipientID };
+            const m = { content: input.value, channel_id: recipientID ? userName : currentChannel, recipient_id: recipientID || "", is_private: !!recipientID };
             socket.send(JSON.stringify(m)); input.value = "";
         }
     };
 
-    function addMessageToUI(t) {
-        const d = document.createElement("div"); d.className = "message"; d.innerText = t; chat.appendChild(d); chat.scrollTop = chat.scrollHeight;
+    // FUNCIÓN MEJORADA PARA MOSTRAR AVATARES
+    function addMessageToUI(data) {
+        const avatar = data.avatar_url || '/static/avatars/default.png';
+        const sender = data.sender || 'Sistema';
+        const content = data.content;
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "msg-wrapper";
+        wrapper.innerHTML = `
+            <img src="${avatar}" class="msg-avatar">
+            <div class="msg-body">
+                <div class="msg-header">
+                    <span class="msg-sender">${sender}</span>
+                </div>
+                <div class="msg-content">${content}</div>
+            </div>
+        `;
+        chat.appendChild(wrapper);
+        chat.scrollTop = chat.scrollHeight;
     }
 
     function loadHistory() {
         if (!currentChannel) return;
-        fetch(`/api/history?channel=${currentChannel}`).then(r => r.json()).then(msgs => msgs?.forEach(m => addMessageToUI(m.content)));
+        fetch(`/api/history?channel=${currentChannel}`).then(r => r.json()).then(msgs => msgs?.forEach(m => addMessageToUI(m)));
     }
 
     function showNotification(sender) {
@@ -205,6 +229,7 @@
     }
 
     function logout() { localStorage.clear(); window.location.reload(); }
+    
     async function uploadAvatar() {
         const file = document.getElementById("avatarInput").files[0];
         if (!file) return;
@@ -215,6 +240,7 @@
         localStorage.setItem('chango_avatar', userAvatar);
         document.getElementById("myAvatar").src = userAvatar;
         document.getElementById("modalAvatar").src = userAvatar;
+        alert("Avatar actualizado! Reinicia para que los demás lo vean.");
     }
 </script>
 </body>
