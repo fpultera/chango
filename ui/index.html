@@ -6,38 +6,29 @@
     <style>
         :root { --sidebar-bg: #1e1f22; --chat-bg: #313338; --accent: #5865f2; --danger: #da373c; }
         body { font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; height: 100vh; color: #dbdee1; background: var(--chat-bg); overflow: hidden; }
-        
         #auth-overlay { position: fixed; inset: 0; background: #1e1f22; z-index: 500; display: flex; align-items: center; justify-content: center; }
         .auth-box { background: #313338; padding: 30px; border-radius: 8px; width: 300px; text-align: center; }
         .auth-box input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 4px; border: none; background: #1e1f22; color: white; box-sizing: border-box; }
-
         #sidebar { width: 220px; background: var(--sidebar-bg); padding: 15px; display: flex; flex-direction: column; }
         .profile-card { display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; margin-bottom: 20px; cursor: pointer; }
         .profile-card:hover { background: rgba(0,0,0,0.4); }
         .avatar-img { width: 35px; height: 35px; border-radius: 50%; object-fit: cover; background: #4e5058; }
-        
         #channel-list { flex: 1; overflow-y: auto; }
         .channel-btn { padding: 10px; border-radius: 5px; cursor: pointer; margin-bottom: 2px; }
         .channel-btn.active { background: var(--accent); color: white; }
-
         #main { flex: 1; display: flex; flex-direction: column; }
         #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
         .message { background: #383a40; padding: 10px; border-radius: 8px; max-width: 85%; align-self: flex-start; }
-        
         #user-list { width: 180px; background: var(--sidebar-bg); padding: 15px; border-left: 1px solid #26272d; }
         .user-item { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; cursor: pointer; font-size: 0.9em; }
         .dot { width: 8px; height: 8px; background: #23a55a; border-radius: 50%; }
-
         .input-area { padding: 20px; }
         #msgInput { width: 100%; padding: 12px; border-radius: 8px; border: none; background: #383a40; color: white; outline: none; box-sizing: border-box; }
-
         #profile-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 600; display: none; align-items: center; justify-content: center; }
         .modal-content { background: var(--chat-bg); padding: 30px; border-radius: 12px; width: 300px; text-align: center; }
-
         #notif-container { position: fixed; top: 20px; right: 20px; z-index: 1000; }
         .toast { background: var(--accent); color: white; padding: 12px; border-radius: 8px; margin-bottom: 10px; cursor: pointer; animation: slide 0.3s; }
         @keyframes slide { from { transform: translateX(100%); } to { transform: translateX(0); } }
-        
         button { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
@@ -48,10 +39,10 @@
 <div id="auth-overlay">
     <div class="auth-box">
         <h2 style="color: white">Chango 🐵</h2>
-        <input type="text" id="username" placeholder="Usuario" autocomplete="off">
+        <input type="text" id="username" placeholder="Usuario (letras, núm, _)" autocomplete="off">
         <input type="password" id="password" placeholder="Contraseña">
         <button onclick="auth('login')" style="width: 100%">Entrar</button>
-        <button onclick="auth('register')" style="background:none; color:var(--accent); border:none; margin-top:10px; cursor:pointer">¿Eres nuevo? Regístrate</button>
+        <button onclick="auth('register')" style="background:none; color:var(--accent); border:none; margin-top:10px; cursor:pointer">Regístrate</button>
     </div>
 </div>
 
@@ -101,18 +92,20 @@
     async function auth(type) {
         const uField = document.getElementById("username");
         const pField = document.getElementById("password");
-        
         const u = uField.value.trim();
         const p = pField.value.trim();
 
-        if (!u || !p) {
-            alert("Completa todos los campos, chango.");
-            return;
+        if (!u || !p) return alert("Completa los campos.");
+
+        // --- VALIDACIÓN FRONTEND: Regex ---
+        const regex = /^[a-zA-Z0-9_]+$/;
+        if (!regex.test(u)) {
+            return alert("El usuario solo puede tener letras, números y guiones bajos.");
         }
 
         const res = await fetch(`/api/${type}`, { 
             method: 'POST', 
-            headers: { 'Content-Type': 'application/json' },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({username: u, password: p}) 
         });
 
@@ -125,13 +118,12 @@
                 userName = data.username; userAvatar = data.avatar_url;
                 showChat();
             } else {
-                alert("¡Registrado! Ahora inicia sesión con tus datos.");
-                uField.value = "";
-                pField.value = "";
+                alert("¡Registrado! Ahora inicia sesión.");
+                uField.value = ""; pField.value = "";
             }
         } else {
-            const errorMsg = await res.text();
-            alert("Error: " + errorMsg);
+            const err = await res.text();
+            alert("Error: " + err);
         }
     }
 
@@ -221,7 +213,7 @@
 
     function logout() { localStorage.clear(); window.location.reload(); }
     async function createNewChannel() {
-        const n = prompt("Nombre del canal:");
+        const n = prompt("Nombre:");
         if (n && n.trim()) await fetch('/api/channels', { method: 'POST', body: JSON.stringify({name: n.toLowerCase().trim()}) });
         loadChannels();
     }
