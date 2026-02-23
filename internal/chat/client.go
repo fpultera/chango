@@ -13,7 +13,7 @@ var upgrader = websocket.Upgrader{
 }
 
 type ChatMessage struct {
-	Type      string   `json:"type"` // "chat", "typing", "stop_typing", "users_update"
+	Type      string   `json:"type"` 
 	Content   string   `json:"content"`
 	ChannelID string   `json:"channel_id"`
 	Users     []string `json:"users,omitempty"`
@@ -38,8 +38,18 @@ func HandleWS(hub *Hub, store *data.PostgresStorage) http.HandlerFunc {
 
 		client := &Client{Conn: conn, Hub: hub, Store: store, ChannelID: channel}
 
-		// Registrar usuario y avisar a todos
+		// 1. REGISTRAR al usuario
 		hub.Clients.Store(user, channel)
+
+		// 2. SINCRONIZACIÓN INICIAL (Unicast: Solo a este nuevo usuario)
+		initialUsers := hub.GetOnlineUsers()
+		initialMsg, _ := json.Marshal(ChatMessage{
+			Type:  "users_update",
+			Users: initialUsers,
+		})
+		conn.WriteMessage(websocket.TextMessage, initialMsg)
+
+		// 3. AVISAR AL RESTO (Broadcast vía Redis)
 		client.broadcastUserUpdate()
 
 		go client.readFromRedis()

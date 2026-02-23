@@ -6,19 +6,16 @@
     <style>
         :root { --sidebar-bg: #1e1f22; --chat-bg: #313338; --user-bg: #2b2d31; --accent: #5865f2; }
         body { font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; height: 100vh; color: #dbdee1; background: var(--chat-bg); overflow: hidden; }
-        
         #sidebar { width: 200px; background: var(--sidebar-bg); padding: 15px; display: flex; flex-direction: column; gap: 5px; }
-        .channel-btn { padding: 10px; border-radius: 5px; cursor: pointer; }
+        .channel-btn { padding: 10px; border-radius: 5px; cursor: pointer; transition: 0.2s; }
+        .channel-btn:hover { background: #35373c; }
         .channel-btn.active { background: var(--accent); color: white; }
-
-        #main { flex: 1; display: flex; flex-direction: column; }
+        #main { flex: 1; display: flex; flex-direction: column; position: relative; }
         #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
-        .message { background: #383a40; padding: 10px; border-radius: 8px; max-width: 85%; }
-
+        .message { background: #383a40; padding: 10px; border-radius: 8px; max-width: 85%; align-self: flex-start; }
         #user-list { width: 180px; background: var(--sidebar-bg); padding: 15px; border-left: 1px solid #26272d; }
-        .user-item { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 0.9em; }
+        .user-item { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 0.9em; color: #949ba4; }
         .dot { width: 8px; height: 8px; background: #23a55a; border-radius: 50%; }
-
         .input-area { padding: 20px; background: var(--chat-bg); }
         .input-row { display: flex; gap: 10px; }
         input { flex: 1; padding: 12px; border-radius: 8px; border: none; background: #383a40; color: white; outline: none; }
@@ -29,7 +26,7 @@
 <body>
 
 <div id="sidebar">
-    <h3 style="color: white;">Chango 🐵</h3>
+    <h3 style="color: white; margin-bottom: 20px;">Chango 🐵</h3>
     <div class="channel-btn active" onclick="switchChannel('general', this)"># general</div>
     <div class="channel-btn" onclick="switchChannel('dev', this)"># dev</div>
     <div class="channel-btn" onclick="switchChannel('random', this)"># random</div>
@@ -48,13 +45,13 @@
 </div>
 
 <div id="user-list">
-    <h4 style="color: #949ba4; text-transform: uppercase; font-size: 0.75em;">Online</h4>
+    <h4 style="color: white; text-transform: uppercase; font-size: 0.75em; margin-bottom: 15px; letter-spacing: 0.5px;">Usuarios Online</h4>
     <div id="online-users"></div>
 </div>
 
 <script>
     let currentChannel = 'general';
-    const userName = prompt("Tu nombre:", "Chango_" + Math.floor(Math.random()*100)) || "Anonimo";
+    const userName = prompt("¿Cómo te llamas hoy?", "Chango_" + Math.floor(Math.random()*99)) || "Anonimo";
     const chat = document.getElementById("chat");
     const input = document.getElementById("msgInput");
     const typingStatus = document.getElementById("typing-status");
@@ -68,6 +65,7 @@
         
         socket.onmessage = (e) => {
             const data = JSON.parse(e.data);
+            
             if (data.type === "users_update") {
                 updateUserList(data.users);
             } else if (data.type === "typing" && data.channel_id === currentChannel) {
@@ -84,8 +82,10 @@
     }
 
     function updateUserList(users) {
+        if (!users) return;
         userListDiv.innerHTML = "";
-        users.forEach(u => {
+        // Limpiar duplicados visuales por si acaso
+        [...new Set(users)].forEach(u => {
             const div = document.createElement("div");
             div.className = "user-item";
             div.innerHTML = `<span class="dot"></span> ${u}`;
@@ -102,7 +102,7 @@
     });
 
     function send() {
-        if (input.value) {
+        if (input.value.trim()) {
             socket.send(JSON.stringify({ type: "chat", content: `${userName}: ${input.value}`, channel_id: currentChannel }));
             input.value = "";
         }
