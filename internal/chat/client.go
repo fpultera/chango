@@ -85,6 +85,7 @@ func (c *Client) readFromWS(userName string) {
 				chatMsg.Sender = userName
 			}
 
+			// Formato para el historial: "Usuario: Mensaje"
 			fullContent := userName + ": " + chatMsg.Content
 			c.Store.SaveMessage(context.Background(), data.Message{
 				Content:     fullContent,

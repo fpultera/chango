@@ -76,6 +76,15 @@ func main() {
 			if name != "" && body.Owner != "" {
 				store.CreateChannel(context.Background(), name, body.Owner)
 				rdb.Publish(context.Background(), "chango_chat", `{"type":"channels_update"}`)
+				w.WriteHeader(201)
+			}
+		case "PUT":
+			var body struct{ OldName, NewName, Owner string }
+			json.NewDecoder(r.Body).Decode(&body)
+			if body.OldName != "" && body.NewName != "" && body.Owner != "" {
+				store.UpdateChannel(context.Background(), body.OldName, body.NewName, body.Owner)
+				rdb.Publish(context.Background(), "chango_chat", `{"type":"channels_update"}`)
+				w.WriteHeader(200)
 			}
 		case "DELETE":
 			name, owner := r.URL.Query().Get("name"), r.URL.Query().Get("owner")
@@ -114,6 +123,6 @@ func main() {
 
 	http.HandleFunc("/ws", chat.HandleWS(hub, store))
 
-	log.Println("🚀 Chango Pro con Historial Corregido en :8080")
+	log.Println("🚀 Chango Pro con Edición de Canales en :8080")
 	http.ListenAndServe(":8080", nil)
 }

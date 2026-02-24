@@ -42,7 +42,6 @@ func NewPostgresPool(ctx context.Context, dsn string) (*PostgresStorage, error) 
 	return &PostgresStorage{Pool: pool}, nil
 }
 
-// --- Usuarios ---
 func (s *PostgresStorage) CreateUser(ctx context.Context, username, password string) error {
 	hashed, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	_, err := s.Pool.Exec(ctx, "INSERT INTO users (username, password, avatar_url) VALUES ($1, $2, $3)", 
@@ -76,7 +75,6 @@ func (s *PostgresStorage) UpdateUserAvatar(ctx context.Context, username, avatar
 	return err
 }
 
-// --- Mensajes ---
 func (s *PostgresStorage) SaveMessage(ctx context.Context, m Message) error {
 	query := `INSERT INTO messages (content, channel_id, is_private, recipient_id) VALUES ($1, $2, $3, $4)`
 	_, err := s.Pool.Exec(ctx, query, m.Content, m.ChannelID, m.IsPrivate, m.RecipientID)
@@ -90,23 +88,17 @@ func (s *PostgresStorage) GetHistory(ctx context.Context, channelID string) ([]M
 		LEFT JOIN users u ON m.content LIKE u.username || ':%'
 		WHERE m.channel_id = $1 AND m.is_private = false
 		ORDER BY m.created_at ASC LIMIT 50`
-	
 	rows, err := s.Pool.Query(ctx, query, channelID)
 	if err != nil { return nil, err }
 	defer rows.Close()
-
 	var messages []Message
 	for rows.Next() {
 		var content, sender, avatar string
 		var createdAt time.Time
 		rows.Scan(&content, &createdAt, &sender, &avatar)
-		
 		cleanContent := content
 		prefix := sender + ": "
-		if strings.HasPrefix(content, prefix) {
-			cleanContent = strings.TrimPrefix(content, prefix)
-		}
-
+		if strings.HasPrefix(content, prefix) { cleanContent = strings.TrimPrefix(content, prefix) }
 		messages = append(messages, Message{Content: cleanContent, Sender: sender, AvatarURL: avatar, CreatedAt: createdAt})
 	}
 	return messages, nil
@@ -123,7 +115,6 @@ func (s *PostgresStorage) GetPrivateHistory(ctx context.Context, u1, u2 string) 
 	rows, err := s.Pool.Query(ctx, query, u1, u2)
 	if err != nil { return nil, err }
 	defer rows.Close()
-
 	var messages []Message
 	for rows.Next() {
 		var content, sender, avatar string
@@ -131,17 +122,20 @@ func (s *PostgresStorage) GetPrivateHistory(ctx context.Context, u1, u2 string) 
 		rows.Scan(&content, &createdAt, &sender, &avatar)
 		cleanContent := content
 		prefix := sender + ": "
-		if strings.HasPrefix(content, prefix) {
-			cleanContent = strings.TrimPrefix(content, prefix)
-		}
+		if strings.HasPrefix(content, prefix) { cleanContent = strings.TrimPrefix(content, prefix) }
 		messages = append(messages, Message{Content: cleanContent, Sender: sender, AvatarURL: avatar, CreatedAt: createdAt})
 	}
 	return messages, nil
 }
 
-// --- Canales ---
 func (s *PostgresStorage) CreateChannel(ctx context.Context, name, owner string) error {
 	_, err := s.Pool.Exec(ctx, "INSERT INTO channels (name, owner) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING", name, owner)
+	return err
+}
+
+func (s *PostgresStorage) UpdateChannel(ctx context.Context, oldName, newName, owner string) error {
+    // Solo actualiza si el nombre viejo coincide y el owner es el correcto
+	_, err := s.Pool.Exec(ctx, "UPDATE channels SET name = $1 WHERE name = $2 AND owner = $3", newName, oldName, owner)
 	return err
 }
 
