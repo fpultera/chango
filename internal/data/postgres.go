@@ -58,6 +58,19 @@ func (s *PostgresStorage) GetUserByUsername(ctx context.Context, username string
 	return &u, nil
 }
 
+func (s *PostgresStorage) GetAllUsers(ctx context.Context) ([]User, error) {
+	rows, err := s.Pool.Query(ctx, "SELECT username, avatar_url FROM users ORDER BY username ASC")
+	if err != nil { return nil, err }
+	defer rows.Close()
+	var users []User
+	for rows.Next() {
+		var u User
+		rows.Scan(&u.Username, &u.AvatarURL)
+		users = append(users, u)
+	}
+	return users, nil
+}
+
 func (s *PostgresStorage) UpdateUserAvatar(ctx context.Context, username, avatarURL string) error {
 	_, err := s.Pool.Exec(ctx, "UPDATE users SET avatar_url = $1 WHERE username = $2", avatarURL, username)
 	return err
@@ -87,8 +100,13 @@ func (s *PostgresStorage) GetHistory(ctx context.Context, channelID string) ([]M
 		var content, sender, avatar string
 		var createdAt time.Time
 		rows.Scan(&content, &createdAt, &sender, &avatar)
+		
 		cleanContent := content
-		if parts := strings.SplitN(content, ": ", 2); len(parts) > 1 { cleanContent = parts[1] }
+		prefix := sender + ": "
+		if strings.HasPrefix(content, prefix) {
+			cleanContent = strings.TrimPrefix(content, prefix)
+		}
+
 		messages = append(messages, Message{Content: cleanContent, Sender: sender, AvatarURL: avatar, CreatedAt: createdAt})
 	}
 	return messages, nil
@@ -112,13 +130,16 @@ func (s *PostgresStorage) GetPrivateHistory(ctx context.Context, u1, u2 string) 
 		var createdAt time.Time
 		rows.Scan(&content, &createdAt, &sender, &avatar)
 		cleanContent := content
-		if parts := strings.SplitN(content, ": ", 2); len(parts) > 1 { cleanContent = parts[1] }
+		prefix := sender + ": "
+		if strings.HasPrefix(content, prefix) {
+			cleanContent = strings.TrimPrefix(content, prefix)
+		}
 		messages = append(messages, Message{Content: cleanContent, Sender: sender, AvatarURL: avatar, CreatedAt: createdAt})
 	}
 	return messages, nil
 }
 
-// --- Canales (CORREGIDO) ---
+// --- Canales ---
 func (s *PostgresStorage) CreateChannel(ctx context.Context, name, owner string) error {
 	_, err := s.Pool.Exec(ctx, "INSERT INTO channels (name, owner) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING", name, owner)
 	return err

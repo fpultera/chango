@@ -59,7 +59,11 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"token": tokenString, "username": u.Username, "avatar_url": u.AvatarURL})
 	})
 
-	// ENDPOINT CANALES CORREGIDO
+	http.HandleFunc("/api/users", func(w http.ResponseWriter, r *http.Request) {
+		users, _ := store.GetAllUsers(context.Background())
+		json.NewEncoder(w).Encode(users)
+	})
+
 	http.HandleFunc("/api/channels", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
@@ -67,21 +71,17 @@ func main() {
 			json.NewEncoder(w).Encode(channels)
 		case "POST":
 			var body struct{ Name, Owner string }
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				http.Error(w, "Bad Request", 400); return
-			}
+			json.NewDecoder(r.Body).Decode(&body)
 			name := strings.TrimSpace(body.Name)
 			if name != "" && body.Owner != "" {
 				store.CreateChannel(context.Background(), name, body.Owner)
 				rdb.Publish(context.Background(), "chango_chat", `{"type":"channels_update"}`)
-				w.WriteHeader(201)
 			}
 		case "DELETE":
 			name, owner := r.URL.Query().Get("name"), r.URL.Query().Get("owner")
 			if name != "" && owner != "" {
 				store.DeleteChannel(context.Background(), name, owner)
 				rdb.Publish(context.Background(), "chango_chat", `{"type":"channels_update"}`)
-				w.WriteHeader(200)
 			}
 		}
 	})
@@ -114,6 +114,6 @@ func main() {
 
 	http.HandleFunc("/ws", chat.HandleWS(hub, store))
 
-	log.Println("🚀 Chango Pro corriendo en :8080")
+	log.Println("🚀 Chango Pro con Historial Corregido en :8080")
 	http.ListenAndServe(":8080", nil)
 }
