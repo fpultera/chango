@@ -24,7 +24,7 @@
         .modal-description { color: var(--text-muted); margin-bottom: 25px; line-height: 1.5; font-size: 0.95em; }
         .modal-actions { display: flex; justify-content: flex-end; gap: 12px; background: #2b2d31; padding: 15px 30px; margin: 0 -30px -30px -30px; border-radius: 0 0 12px 12px; }
 
-        /* Botones Estilizados */
+        /* Botones */
         button { border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 0.9em; }
         .btn-accent { background: var(--accent); color: white; }
         .btn-accent:hover { background: #4752c4; }
@@ -33,7 +33,7 @@
         .btn-ghost { background: transparent; color: white; }
         .btn-ghost:hover { text-decoration: underline; }
 
-        /* Estructura Principal */
+        /* Sidebar y Canales */
         #sidebar { width: 220px; background: var(--sidebar-bg); padding: 15px; display: flex; flex-direction: column; }
         .profile-card { display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; margin-bottom: 20px; cursor: pointer; }
         .avatar-img { width: 35px; height: 35px; border-radius: 50%; object-fit: cover; background: #4e5058; flex-shrink: 0; }
@@ -46,6 +46,7 @@
         .action-btn { color: #949ba4; font-size: 0.9em; cursor: pointer; }
         .action-btn:hover { color: white; }
 
+        /* Chat Principal */
         #main { flex: 1; display: flex; flex-direction: column; }
         #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
         .msg-wrapper { display: flex; gap: 12px; align-items: flex-start; max-width: 85%; }
@@ -54,6 +55,7 @@
         .msg-sender { font-weight: bold; color: white; font-size: 0.95em; }
         .msg-content { background: #383a40; padding: 10px; border-radius: 0 12px 12px 12px; line-height: 1.4; word-break: break-word; }
 
+        /* Lista Usuarios */
         #user-list { width: 180px; background: var(--sidebar-bg); padding: 15px; border-left: 1px solid #26272d; }
         .user-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; cursor: pointer; font-size: 0.9em; padding: 5px; border-radius: 4px; position: relative; }
         .dot { width: 8px; height: 8px; background: #4e5058; border-radius: 50%; }
@@ -61,13 +63,39 @@
         .unread-indicator { width: 10px; height: 10px; background: var(--notif); border-radius: 50%; display: none; }
         .has-notif .unread-indicator { display: block; }
 
+        /* VENTANAS MINI CHAT (DMs) - CORRECCIÓN DE BARRA */
         #chat-windows-container { position: fixed; bottom: 0; right: 200px; display: flex; flex-direction: row-reverse; gap: 10px; z-index: 900; pointer-events: none; }
-        .mini-chat { width: 280px; height: 350px; background: #2b2d31; border-radius: 8px 8px 0 0; display: none; flex-direction: column; box-shadow: 0 -2px 10px rgba(0,0,0,0.5); pointer-events: auto; border: 1px solid #1e1f22; }
+        .mini-chat { 
+            width: 280px; 
+            height: 350px; 
+            background: #2b2d31; 
+            border-radius: 8px 8px 0 0; 
+            display: none; 
+            flex-direction: column; 
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.5); 
+            pointer-events: auto; 
+            border: 1px solid #1e1f22; 
+        }
         .mini-chat.visible { display: flex; }
         .mini-chat-header { padding: 10px; background: var(--sidebar-bg); border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
         .mini-chat-messages { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; font-size: 0.85em; }
-        .mini-chat-input { padding: 10px; border-top: 1px solid #383a40; }
-        .mini-chat-input input { width: 100%; background: #383a40; border: none; color: white; padding: 8px; border-radius: 4px; outline: none; }
+        
+        .mini-chat-input { 
+            padding: 12px; 
+            border-top: 1px solid #383a40; 
+            background: #2b2d31;
+        }
+        .mini-chat-input input { 
+            width: 100%; 
+            background: #383a40; 
+            border: none; 
+            color: white; 
+            padding: 10px; 
+            border-radius: 4px; 
+            outline: none; 
+            box-sizing: border-box; /* ESTO EVITA QUE SOBRESALGA */
+            display: block;
+        }
 
         .input-area { padding: 20px; }
         #msgInput { width: 100%; padding: 12px; border-radius: 8px; border: none; background: #383a40; color: white; outline: none; box-sizing: border-box; }
@@ -230,7 +258,15 @@
         if (openMiniChats[targetUser]) return;
         const div = document.createElement("div");
         div.className = "mini-chat";
-        div.innerHTML = `<div class="mini-chat-header"><span>@ ${targetUser}</span><span onclick="closeMiniChat('${targetUser}')">×</span></div><div class="mini-chat-messages"></div><div class="mini-chat-input"><input type="text" placeholder="Responder..." onkeypress="sendMiniMsg(event, '${targetUser}')"></div>`;
+        div.innerHTML = `
+            <div class="mini-chat-header">
+                <span>@ ${targetUser}</span>
+                <span onclick="closeMiniChat('${targetUser}')" style="cursor:pointer; font-weight:bold;">×</span>
+            </div>
+            <div class="mini-chat-messages"></div>
+            <div class="mini-chat-input">
+                <input type="text" placeholder="Responder..." onkeypress="sendMiniMsg(event, '${targetUser}')">
+            </div>`;
         chatWindowsContainer.appendChild(div);
         openMiniChats[targetUser] = div;
         fetch(`/api/history/private?user1=${userName}&user2=${targetUser}`).then(r => r.json()).then(msgs => msgs?.forEach(m => addMessageToUI(m, div.querySelector(".mini-chat-messages"))));
